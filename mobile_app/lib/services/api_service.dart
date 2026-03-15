@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000'; // local FastAPI
+  static final String baseUrl = AppConfig.baseUrl; // Dynamic based on platform
+
 
   // Send message to get parsed reminder and confirmation text
   Future<Map<String, dynamic>> sendMessage(String message) async {
