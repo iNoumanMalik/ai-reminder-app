@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:ui' as ui;
 import '../services/chat_provider.dart';
 import '../widgets/message_bubble.dart';
 
@@ -15,10 +16,10 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechAvailable = false;
   bool _isListening = false;
-  String _sttStatusText = '';
-  int _noMatchRetries = 0;
-  static const int _maxNoMatchRetries = 2;
+  String? _localeId;
+  String _lastRecognizedWords = '';
 
   @override
   void initState() {
@@ -28,10 +29,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _initSpeech() async {
     await Permission.microphone.request();
-    await _speech.initialize(
+    _speechAvailable = await _speech.initialize(
       onStatus: _onSpeechStatus,
       onError: _onSpeechError,
     );
+    if (_speechAvailable) {
+      final locales = await _speech.locales();
+      if (locales.isNotEmpty) {
+        final deviceLanguage = ui.PlatformDispatcher.instance.locale.languageCode;
+        final preferred = locales.where(
+          (l) => l.localeId.toLowerCase().startsWith(deviceLanguage.toLowerCase()),
+        );
+        _localeId = preferred.isNotEmpty ? preferred.first.localeId : locales.first.localeId;
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -39,42 +50,53 @@ class _ChatScreenState extends State<ChatScreen> {
     debugPrint('STT Status: $status');
     if (!mounted) return;
     setState(() {
-      _sttStatusText = status;
       if (status == 'notListening' || status == 'done') {
         _isListening = false;
+        if (_lastRecognizedWords.trim().isNotEmpty) {
+          _textController.text = _lastRecognizedWords.trim();
+          _textController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _textController.text.length),
+          );
+        }
       }
     });
   }
 
-  void _onSpeechError(stt.SpeechRecognitionError error) {
+  void _onSpeechError(dynamic error) {
     debugPrint('STT Error: $error');
     if (!mounted) return;
 
-    // Emulator frequently returns no_match quickly; retry briefly.
-    if (error.errorMsg == 'error_no_match' && _noMatchRetries < _maxNoMatchRetries) {
-      _noMatchRetries += 1;
-      _startListening();
-      return;
-    }
+    final String errorMsg = error?.errorMsg?.toString() ?? error.toString();
+    final transient =
+        errorMsg.contains('error_no_match') || errorMsg.contains('error_speech_timeout');
 
     setState(() {
       _isListening = false;
-      _sttStatusText = error.errorMsg;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Voice input error: ${error.errorMsg}. Try speaking clearly.'),
-      ),
-    );
+    if (!transient) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Voice input error: $errorMsg. Try speaking clearly.'),
+        ),
+      );
+    }
   }
 
   Future<void> _startListening() async {
-    final available = await _speech.initialize(
-      onStatus: _onSpeechStatus,
-      onError: _onSpeechError,
-    );
-    if (!available) {
+    if (!_speechAvailable) {
+      _speechAvailable = await _speech.initialize(
+        onStatus: _onSpeechStatus,
+        onError: _onSpeechError,
+      );
+      if (_speechAvailable && _localeId == null) {
+        final locales = await _speech.locales();
+        if (locales.isNotEmpty) {
+          _localeId = locales.first.localeId;
+        }
+      }
+    }
+    if (!_speechAvailable) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -86,17 +108,54 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       _isListening = true;
-      _sttStatusText = 'listening';
     });
 
     await _speech.listen(
-      listenFor: const Duration(seconds: 12),
-      pauseFor: const Duration(seconds: 3),
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 6),
+      localeId: _localeId,
       partialResults: true,
-      cancelOnError: true,
+      cancelOnError: false,
+      listenMode: stt.ListenMode.dictation,
       onResult: (val) => setState(() {
-        _textController.text = val.recognizedWords;
+        final words = val.recognizedWords.trim();
+        if (words.isNotEmpty) {
+          _lastRecognizedWords = words;
+          _textController.text = words;
+          _textController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _textController.text.length),
+          );
+        }
       }),
+    );
+  }
+
+  Future<void> _stopListeningAndMaybeSend() async {
+    if (!_isListening) return;
+    setState(() => _isListening = false);
+    await _speech.stop();
+
+    // Allow final STT result callback to update text before auto-send.
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    if (_textController.text.trim().isNotEmpty) {
+      _sendMessage();
+      return;
+    }
+    if (_lastRecognizedWords.trim().isNotEmpty) {
+      _textController.text = _lastRecognizedWords.trim();
+      _textController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _textController.text.length),
+      );
+      _sendMessage();
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No speech captured. Check emulator mic routing or try a real device.',
+        ),
+      ),
     );
   }
 
@@ -112,11 +171,10 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         return;
       }
-      _noMatchRetries = 0;
+      _lastRecognizedWords = '';
       await _startListening();
     } else {
-      setState(() => _isListening = false);
-      _speech.stop();
+      await _stopListeningAndMaybeSend();
     }
   }
 
@@ -166,14 +224,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 return const SizedBox.shrink();
               },
             ),
-            if (_sttStatusText.isNotEmpty)
+            if (_isListening)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
-                  _isListening ? 'Listening...' : 'Voice: $_sttStatusText',
+                  'Listening...',
                   style: TextStyle(
                     fontSize: 12,
-                    color: _isListening ? Colors.red : Colors.grey[600],
+                    color: Colors.red,
                   ),
                 ),
               ),
@@ -191,10 +249,21 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
-                    color: _isListening ? Colors.red : const Color(0xFF6750A4),
-                    onPressed: _listen,
+                  GestureDetector(
+                    onTap: _listen,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _isListening
+                            ? Colors.red.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isListening ? Icons.mic : Icons.mic_none,
+                        color: _isListening ? Colors.red : const Color(0xFF6750A4),
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: TextField(
