@@ -13,18 +13,35 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _textController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
   String? _localeId;
   String _lastRecognizedWords = '';
+  AnimationController? _pulseController;
+  Animation<double>? _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.12).animate(
+      CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
+    );
     _initSpeech();
+  }
+
+  @override
+  void dispose() {
+    _pulseController?.dispose();
+    _textController.dispose();
+    super.dispose();
   }
 
   void _initSpeech() async {
@@ -52,6 +69,8 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       if (status == 'notListening' || status == 'done') {
         _isListening = false;
+        _pulseController?.stop();
+        _pulseController?.reset();
         if (_lastRecognizedWords.trim().isNotEmpty) {
           _textController.text = _lastRecognizedWords.trim();
           _textController.selection = TextSelection.fromPosition(
@@ -73,6 +92,8 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _isListening = false;
     });
+    _pulseController?.stop();
+    _pulseController?.reset();
 
     if (!transient) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,6 +130,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _isListening = true;
     });
+    _pulseController?.repeat(reverse: true);
 
     await _speech.listen(
       listenFor: const Duration(seconds: 30),
@@ -133,6 +155,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _stopListeningAndMaybeSend() async {
     if (!_isListening) return;
     setState(() => _isListening = false);
+    _pulseController?.stop();
+    _pulseController?.reset();
     await _speech.stop();
 
     // Allow final STT result callback to update text before auto-send.
@@ -251,17 +275,24 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   GestureDetector(
                     onTap: _listen,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _isListening
-                            ? Colors.red.withValues(alpha: 0.15)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _isListening ? Icons.mic : Icons.mic_none,
-                        color: _isListening ? Colors.red : const Color(0xFF6750A4),
+                    child: AnimatedBuilder(
+                      animation: _pulseAnimation ?? const AlwaysStoppedAnimation<double>(1.0),
+                      builder: (context, child) {
+                        final scale = _isListening ? (_pulseAnimation?.value ?? 1.0) : 1.0;
+                        return Transform.scale(scale: scale, child: child);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _isListening
+                              ? Colors.red.withValues(alpha: 0.15)
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isListening ? Icons.mic : Icons.mic_none,
+                          color: _isListening ? Colors.red : const Color(0xFF6750A4),
+                        ),
                       ),
                     ),
                   ),
