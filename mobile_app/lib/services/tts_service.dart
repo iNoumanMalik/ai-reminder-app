@@ -14,6 +14,14 @@ class TtsService {
     await _tts.setPitch(1.0);
   }
 
+  static Future<void> stop() async {
+    try {
+      await _tts.stop();
+    } catch (e) {
+      debugPrint('TTS stop error: $e');
+    }
+  }
+
   static Future<void> speak(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;

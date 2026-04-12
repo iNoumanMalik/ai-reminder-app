@@ -19,6 +19,9 @@ class ChatProvider with ChangeNotifier {
 
   void setVoiceFeedbackEnabled(bool enabled) {
     _voiceFeedbackEnabled = enabled;
+    if (!enabled) {
+      TtsService.stop();
+    }
     notifyListeners();
   }
 
