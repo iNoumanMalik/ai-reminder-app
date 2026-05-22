@@ -8,6 +8,8 @@ pydantic-settings
 python-dotenv
 openai
 google-generativeai
+httpx
+anthropic
 APScheduler
 deepseek
 firebase-admin

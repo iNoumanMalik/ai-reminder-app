@@ -1,66 +1,13 @@
-import os
 import json
 import re
 import logging
-from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
-
-try:
-    from google import genai
-    from google.genai import types
-except ImportError:
-    genai = None
+from .gateway.exceptions import AllProvidersFailedError
+from .gateway.factory import get_default_router
 
 logger = logging.getLogger(__name__)
-
-load_dotenv()
-
-api_key = os.getenv("GEMINI_API_KEY")
-if genai and api_key:
-
-    client = genai.Client(api_key=api_key)
-    try:
-        models = client.models.list()
-        available_models = [m.name for m in models if "gemini" in m.name]
-        print(f"Available Gemini models: {available_models}")
-        
-        # Choose the best available (prioritized order)
-        if "models/gemini-2.5-flash" in available_models:
-            model_name = "models/gemini-2.5-flash"  # Latest flash (fast & capable)
-        elif "models/gemini-flash-latest" in available_models:
-            model_name = "models/gemini-flash-latest"  # Auto-updating flash
-        elif "models/gemini-2.0-flash" in available_models:
-            model_name = "models/gemini-2.0-flash"  # Stable flash
-        elif "models/gemini-2.0-flash-lite" in available_models:
-            model_name = "models/gemini-2.0-flash-lite"  # Lite version (cheaper)
-        elif "models/gemini-2.5-pro" in available_models:
-            model_name = "models/gemini-2.5-pro"  # Pro version (more powerful)
-        else:
-            # Fallback to any available Gemini model (excluding preview)
-            gemini_models = [m for m in available_models if "gemini" in m and "preview" not in m]
-            model_name = gemini_models[0] if gemini_models else "models/gemini-2.5-flash"
-        
-        print(f"Selected model: {model_name}")
-    
-    except Exception as e:
-        print(f"Could not list models: {e}")
-        model_name = "models/gemini-2.5-flash"  # Safe fallback
-    
-    safety_settings = [
-        types.SafetySetting(
-            category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-        ),
-        types.SafetySetting(
-            category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-        ),
-    ]
-else:
-    client = None
-    model_name = None
 
 
 def _today_utc() -> str:
@@ -217,8 +164,10 @@ async def extract_reminder_details(
     intent, task, date, time, repeat, needs_time, needs_clarification,
     clarification_question, editable_reminder_id (optional).
     """
-    if not client or not api_key:
-        logger.warning("Gemini client not initialized. Using mock extractor.")
+    try:
+        router = get_default_router()
+    except RuntimeError:
+        logger.warning("AI router not configured. Using mock extractor.")
         return get_mock_reminder(message, pending_context)
 
     now = datetime.now()
@@ -269,21 +218,16 @@ IMPORTANT: Raw JSON only, no code fences.
 
     try:
         full_prompt = f"{system_prompt}\n\nUser message: {message}"
-        response = await client.aio.models.generate_content(
-            model=model_name,
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                temperature=0,
-                safety_settings=(
-                    safety_settings if "safety_settings" in locals() else None
-                ),
-            ),
+        result = await router.generate(
+            full_prompt,
+            temperature=0,
+            response_format="json",
         )
-        if not response or not response.text:
-            logger.warning("Empty response from Gemini")
+        if not result.text:
+            logger.warning("Empty response from AI router (provider=%s)", result.provider)
             return None
 
-        reply_content = clean_json_response(response.text)
+        reply_content = clean_json_response(result.text)
         try:
             parsed = json.loads(reply_content)
         except json.JSONDecodeError:
@@ -293,8 +237,11 @@ IMPORTANT: Raw JSON only, no code fences.
             return None
 
         return _normalize_parsed(parsed)
+    except AllProvidersFailedError as e:
+        logger.error("All AI providers failed for extraction: %s", e)
+        return get_mock_reminder(message, pending_context)
     except Exception as e:
-        logger.error(f"Error during AI extraction with Gemini: {e}")
+        logger.error("Error during AI extraction: %s", e)
         return None
 
 
