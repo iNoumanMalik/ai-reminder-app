@@ -14,6 +14,7 @@ import models
 import routers.auth
 import routers.chat
 import routers.devices
+import routers.health
 import routers.reminders
 from rate_limit import limiter
 from services.scheduler import start_scheduler
@@ -61,6 +62,7 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to AI Reminder API"}
 
+app.include_router(routers.health.router, prefix="/health", tags=["health"])
 app.include_router(routers.auth.router, prefix="/auth", tags=["auth"])
 app.include_router(routers.chat.router, prefix="/chat", tags=["chat"])
 app.include_router(routers.reminders.router, prefix="/reminders", tags=["reminders"])

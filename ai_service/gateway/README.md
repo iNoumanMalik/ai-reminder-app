@@ -26,6 +26,15 @@ Override models with `OPENAI_MODEL`, `GEMINI_MODEL`, etc.
 
 On failure, the router logs the provider + error and tries the next provider.
 
+## Health endpoint
+
+Backend exposes:
+
+- `GET /health/ai` — configuration + router status (no API calls)
+- curl http://127.0.0.1:8000/health/ai
+- `GET /health/ai?probe=true` — live minimal request per configured provider
+- curl "http://127.0.0.1:8000/health/ai?probe=true"
+
 ## Usage
 
 ```python
