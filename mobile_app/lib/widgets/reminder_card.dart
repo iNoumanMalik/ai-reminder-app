@@ -47,7 +47,7 @@ class ReminderCard extends StatelessWidget {
                   onPressed: reminder.isCompleted ? null : onComplete,
                 ),
                 title: Text(
-                  reminder.task,
+                  reminder.displayTask,
                   style: TextStyle(
                     decoration:
                         reminder.isCompleted ? TextDecoration.lineThrough : null,

@@ -29,4 +29,20 @@ class Reminder {
   String get formattedDate => DateFormat('yyyy-MM-dd').format(datetime);
   String get formattedTime => DateFormat('HH:mm').format(datetime);
   bool get isCompleted => status == 'completed';
+
+  /// Title-cased task for display in the reminders list.
+  String get displayTask => toTitleCaseWords(task);
+}
+
+String toTitleCaseWords(String text) {
+  if (text.isEmpty) return text;
+
+  return text
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map(
+        (word) =>
+            '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+      )
+      .join(' ');
 }
