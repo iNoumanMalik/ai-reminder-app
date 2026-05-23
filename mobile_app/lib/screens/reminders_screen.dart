@@ -12,12 +12,48 @@ class RemindersScreen extends StatefulWidget {
 }
 
 class _RemindersScreenState extends State<RemindersScreen> {
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _loadReminders() async {
+    try {
+      await context.read<ReminderProvider>().fetchReminders();
+    } catch (_) {
+      _showError('Could not load reminders. Pull to refresh to try again.');
+    }
+  }
+
+  Future<void> _completeReminder(String id) async {
+    try {
+      await context.read<ReminderProvider>().completeReminder(id);
+    } catch (_) {
+      _showError('Could not update reminder. Please try again.');
+    }
+  }
+
+  Future<void> _deleteReminder(String id) async {
+    try {
+      await context.read<ReminderProvider>().deleteReminder(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reminder deleted')),
+      );
+    } catch (_) {
+      _showError('Could not delete reminder. Please try again.');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReminderProvider>().fetchReminders();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadReminders());
   }
 
   @override
@@ -51,15 +87,15 @@ class _RemindersScreenState extends State<RemindersScreen> {
           }
 
           return RefreshIndicator(
-            onRefresh: provider.fetchReminders,
+            onRefresh: _loadReminders,
             child: ListView.builder(
               itemCount: provider.reminders.length,
               itemBuilder: (context, index) {
                 final reminder = provider.reminders[index];
                 return ReminderCard(
                   reminder: reminder,
-                  onComplete: () => provider.completeReminder(reminder.id),
-                  onDelete: () => provider.deleteReminder(reminder.id),
+                  onComplete: () => _completeReminder(reminder.id),
+                  onDelete: () => _deleteReminder(reminder.id),
                 );
               },
             ),

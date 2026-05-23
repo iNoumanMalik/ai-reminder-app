@@ -57,7 +57,12 @@ class DeliveryAttempt(Base):
     __tablename__ = "delivery_attempts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    reminder_id = Column(UUID(as_uuid=True), ForeignKey("reminders.id"), nullable=False, index=True)
+    reminder_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("reminders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     device_token_id = Column(UUID(as_uuid=True), ForeignKey("device_tokens.id"), nullable=False, index=True)
     dedupe_key = Column(String, nullable=False, unique=True, index=True)
     status = Column(String, default=DeliveryStatus.TEMP_FAILURE.value, nullable=False)

@@ -66,6 +66,9 @@ def delete_reminder(
     if not db_reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
 
+    db.query(models.DeliveryAttempt).filter(
+        models.DeliveryAttempt.reminder_id == reminder_id
+    ).delete(synchronize_session=False)
     db.delete(db_reminder)
     db.commit()
     return {"message": "Reminder deleted successfully"}
