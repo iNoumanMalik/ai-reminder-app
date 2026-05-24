@@ -1,21 +1,10 @@
 import 'dart:io';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 
 import 'device_service.dart';
 import 'reminder_notification_service.dart';
-
-/// FCM background message handler (must be top-level).
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  await ReminderNotificationService.ensureInitialized();
-  await ReminderNotificationService.handleRemoteMessage(message);
-}
 
 class FirebaseMessagingService {
   static final DeviceService _deviceService = DeviceService();
@@ -41,15 +30,14 @@ class FirebaseMessagingService {
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
         final reminderId = message.data['reminder_id']?.toString();
-        if (reminderId != null) {
-          await ReminderNotificationService.showReminderNotification(
-            reminderId: reminderId,
-            title: message.notification?.title ?? 'Reminder',
-            body: message.data['task']?.toString() ??
-                message.notification?.body ??
-                'You have a reminder',
-          );
-        }
+        if (reminderId == null) return;
+        await ReminderNotificationService.showReminderNotification(
+          reminderId: reminderId,
+          title: message.notification?.title ?? 'Reminder',
+          body: message.data['task']?.toString() ??
+              message.notification?.body ??
+              'You have a reminder',
+        );
       });
     }
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -9,6 +10,8 @@ from database import get_db
 from deps import get_current_user
 import models
 import schemas
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,6 +118,15 @@ def complete_reminder(
     return db_reminder
 
 
+def _clear_delivery_history(db: Session, reminder_id: UUID) -> int:
+    deleted = (
+        db.query(models.DeliveryAttempt)
+        .filter(models.DeliveryAttempt.reminder_id == reminder_id)
+        .delete(synchronize_session=False)
+    )
+    return deleted
+
+
 @router.post("/{reminder_id}/snooze", response_model=schemas.ReminderResponse)
 def snooze_reminder(
     reminder_id: UUID,
@@ -127,7 +139,12 @@ def snooze_reminder(
         raise HTTPException(status_code=404, detail="Reminder not found")
 
     now = datetime.now(timezone.utc)
-    db_reminder.datetime = now + timedelta(minutes=body.minutes)
+    previous_status = db_reminder.status
+    previous_datetime = db_reminder.datetime
+    new_datetime = now + timedelta(minutes=body.minutes)
+
+    cleared = _clear_delivery_history(db, reminder_id)
+    db_reminder.datetime = new_datetime
     db_reminder.status = models.ReminderStatus.PENDING.value
     db_reminder.triggered_at = None
     db_reminder.processing_started_at = None
@@ -136,4 +153,16 @@ def snooze_reminder(
     db_reminder.last_error = None
     db.commit()
     db.refresh(db_reminder)
+
+    logger.info(
+        "Snooze reminder_id=%s user_id=%s minutes=%s previous_status=%s "
+        "previous_datetime=%s new_datetime=%s cleared_delivery_attempts=%s",
+        reminder_id,
+        current_user.id,
+        body.minutes,
+        previous_status,
+        previous_datetime,
+        new_datetime,
+        cleared,
+    )
     return db_reminder

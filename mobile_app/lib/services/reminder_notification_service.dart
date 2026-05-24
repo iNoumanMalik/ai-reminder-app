@@ -1,19 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'notification_action_handler.dart';
+import 'notification_background.dart' show onBackgroundNotificationResponse;
 
 /// Shows reminder alerts with Done / Snooze actions (local notifications).
 class ReminderNotificationService {
   ReminderNotificationService._();
 
-  static const String channelId = 'high_importance_channel';
-  static const String channelName = 'High Importance Notifications';
-  static const String channelDescription = 'Reminder alerts';
+  /// New channel id so Android picks up action buttons (channels are immutable).
+  static const String channelId = 'reminder_alerts_v2';
+  static const String channelName = 'Reminder alerts';
+  static const String channelDescription = 'Reminder notifications with actions';
   static const String iosCategoryId = 'reminder_actions';
 
   static final FlutterLocalNotificationsPlugin _plugin =
@@ -43,10 +44,17 @@ class ReminderNotificationService {
           DarwinNotificationAction.plain(
             NotificationActionHandler.actionSnooze5,
             'Snooze 5m',
+            options: {DarwinNotificationActionOption.foreground},
           ),
           DarwinNotificationAction.plain(
             NotificationActionHandler.actionSnooze10,
             'Snooze 10m',
+            options: {DarwinNotificationActionOption.foreground},
+          ),
+          DarwinNotificationAction.plain(
+            NotificationActionHandler.actionSnooze30,
+            'Snooze 30m',
+            options: {DarwinNotificationActionOption.foreground},
           ),
         ],
       ),
@@ -75,17 +83,14 @@ class ReminderNotificationService {
   }
 
   static void _onForegroundNotificationResponse(NotificationResponse response) {
-    unawaited(_dispatchAction(response));
-  }
-
-  static Future<void> _dispatchAction(NotificationResponse response) async {
-    await NotificationActionHandler.processAction(
-      actionId: response.actionId,
-      reminderId: reminderIdFromPayload(response.payload),
+    unawaited(
+      NotificationActionHandler.processAction(
+        actionId: response.actionId,
+        reminderId: reminderIdFromPayload(response.payload),
+      ),
     );
   }
 
-  @visibleForTesting
   static String? reminderIdFromPayload(String? payload) {
     if (payload == null || payload.isEmpty) return null;
     try {
@@ -115,6 +120,8 @@ class ReminderNotificationService {
     final payload = jsonEncode({'reminder_id': reminderId});
     final notificationId = notificationIdFor(reminderId);
 
+    // showsUserInterface: false + ActionBroadcastReceiver (AndroidManifest) for
+    // snooze in background; true on Done so the list can refresh in foreground.
     const androidActions = <AndroidNotificationAction>[
       AndroidNotificationAction(
         NotificationActionHandler.actionDone,
@@ -125,16 +132,19 @@ class ReminderNotificationService {
       AndroidNotificationAction(
         NotificationActionHandler.actionSnooze5,
         'Snooze 5m',
+        showsUserInterface: true,
         cancelNotification: true,
       ),
       AndroidNotificationAction(
         NotificationActionHandler.actionSnooze10,
         'Snooze 10m',
+        showsUserInterface: true,
         cancelNotification: true,
       ),
       AndroidNotificationAction(
         NotificationActionHandler.actionSnooze30,
         'Snooze 30m',
+        showsUserInterface: true,
         cancelNotification: true,
       ),
     ];
@@ -189,23 +199,4 @@ class ReminderNotificationService {
       body: task,
     );
   }
-}
-
-/// Notification action taps while app is terminated/backgrounded.
-@pragma('vm:entry-point')
-void onBackgroundNotificationResponse(NotificationResponse response) {
-  WidgetsFlutterBinding.ensureInitialized();
-  unawaited(_backgroundNotificationAction(response));
-}
-
-Future<void> _backgroundNotificationAction(
-  NotificationResponse response,
-) async {
-  await ReminderNotificationService.ensureInitialized();
-  await NotificationActionHandler.processAction(
-    actionId: response.actionId,
-    reminderId: ReminderNotificationService.reminderIdFromPayload(
-      response.payload,
-    ),
-  );
 }

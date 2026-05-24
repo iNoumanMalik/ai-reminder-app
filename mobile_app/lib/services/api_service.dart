@@ -80,7 +80,9 @@ class ApiService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to snooze reminder');
+      throw Exception(
+        'Failed to snooze reminder (${response.statusCode}): ${response.body}',
+      );
     }
   }
 

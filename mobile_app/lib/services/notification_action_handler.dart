@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import 'api_service.dart';
@@ -23,37 +21,52 @@ class NotificationActionHandler {
     required String? actionId,
     required String? reminderId,
   }) async {
-    if (reminderId == null || reminderId.isEmpty) {
-      debugPrint('Notification action missing reminder_id');
+    if (actionId == null || actionId.isEmpty) {
+      debugPrint(
+        'Notification tap ignored (no actionId). Open the app to manage reminders.',
+      );
       return;
     }
 
-    final id = reminderId;
+    if (reminderId == null || reminderId.isEmpty) {
+      debugPrint('Notification action missing reminder_id for action=$actionId');
+      return;
+    }
+
+    debugPrint('Notification action=$actionId reminder_id=$reminderId');
+
     try {
       switch (actionId) {
         case actionDone:
-          await _api.completeReminder(id);
-          await ReminderNotificationService.cancelReminderNotification(id);
-          debugPrint('Reminder marked done from notification: $id');
+          await _api.completeReminder(reminderId);
+          await ReminderNotificationService.cancelReminderNotification(reminderId);
+          debugPrint('Reminder marked done from notification: $reminderId');
+          break;
         case actionSnooze5:
-          await _snooze(id, 5);
+          await _snooze(reminderId, 5);
+          break;
         case actionSnooze10:
-          await _snooze(id, 10);
+          await _snooze(reminderId, 10);
+          break;
         case actionSnooze30:
-          await _snooze(id, 30);
+          await _snooze(reminderId, 30);
+          break;
         default:
           debugPrint('Unknown notification action: $actionId');
           return;
       }
       onRemindersChanged?.call();
-    } catch (e) {
-      debugPrint('Notification action failed: $e');
+    } catch (e, stack) {
+      debugPrint('Notification action failed action=$actionId: $e\n$stack');
     }
   }
 
   static Future<void> _snooze(String id, int minutes) async {
+    debugPrint('Snooze requested reminder_id=$id minutes=$minutes');
     await _api.snoozeReminder(id, minutes);
     await ReminderNotificationService.cancelReminderNotification(id);
-    debugPrint('Reminder snoozed ${minutes}m from notification: $id');
+    debugPrint(
+      'Snooze saved reminder_id=$id — next fire in $minutes minutes (server UTC)',
+    );
   }
 }
