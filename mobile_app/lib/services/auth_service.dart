@@ -99,7 +99,37 @@ class AuthService {
     return _errorMessage(response);
   }
 
-  static Future<void> logout() => AuthStorage.clear();
+  static Future<String?> loginWithGoogle(String idToken) async {
+    final response = await http
+        .post(
+          Uri.parse('$_base/auth/google'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'id_token': idToken}),
+        )
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => http.Response('', 408),
+        );
+
+    if (response.statusCode == 200) {
+      await _storeTokensFromBody(response.body);
+      return null;
+    }
+    if (response.statusCode == 409) {
+      return 'This email is already registered with a different sign-in method.';
+    }
+    if (response.statusCode == 503) {
+      return 'Google sign-in is not available on the server right now.';
+    }
+    if (response.statusCode == 429) {
+      return 'Too many attempts. Try again in a minute.';
+    }
+    return _errorMessage(response);
+  }
+
+  static Future<void> logout() async {
+    await AuthStorage.clear();
+  }
 
   static Future<void> _storeTokensFromBody(String body) async {
     final map = jsonDecode(body) as Map<String, dynamic>;

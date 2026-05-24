@@ -59,6 +59,7 @@ ts=2026-05-24T12:00:00Z level=INFO logger=ai_service.extractor msg=event=ai_extr
 | Stuck processing recovery | `Recovering stale` or `processing_timeout_recovered` |
 | Chat request | `event=chat_request` |
 | Firebase init | `event=firebase_` |
+| Google sign-in (API) | `event=google_auth_` |
 
 ### How to filter live logs
 

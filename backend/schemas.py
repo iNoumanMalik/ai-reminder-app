@@ -27,6 +27,10 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str = Field(min_length=10, max_length=8192)
+
+
 class ReminderCreate(BaseModel):
     task: str
     datetime: datetime

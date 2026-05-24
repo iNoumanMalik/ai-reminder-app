@@ -23,7 +23,8 @@ class User(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    password = Column(String, nullable=False)
+    password = Column(String, nullable=True)
+    firebase_uid = Column(String, unique=True, index=True, nullable=True)
     timezone = Column(String, nullable=False, default="UTC", server_default="UTC")
     notifications_enabled = Column(
         Boolean, nullable=False, default=True, server_default="true"

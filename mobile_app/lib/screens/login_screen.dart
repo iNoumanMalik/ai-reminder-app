@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -50,8 +51,25 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final err = await context.read<AuthProvider>().signInWithGoogle();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (err != null && err.isNotEmpty) {
+        _error = err;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final showGoogle = !kIsWeb;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -69,10 +87,36 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
+                  if (showGoogle) ...[
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _signInWithGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 28),
+                      label: const Text('Continue with Google'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'or',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   TextField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
+                    enabled: !_busy,
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       border: OutlineInputBorder(),
@@ -82,10 +126,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _password,
                     obscureText: true,
-                    decoration: const InputDecoration(
+                    enabled: !_busy,
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      border: OutlineInputBorder(),
-                      helperText: 'At least 8 characters',
+                      border: const OutlineInputBorder(),
+                      helperText: _registerMode
+                          ? 'At least 8 characters'
+                          : null,
                     ),
                   ),
                   if (_error != null) ...[

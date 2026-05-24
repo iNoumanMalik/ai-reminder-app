@@ -7,6 +7,7 @@ import 'auth_http.dart';
 import 'auth_service.dart';
 import 'auth_storage.dart';
 import 'firebase_messaging_service.dart';
+import 'google_auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider() {
@@ -65,7 +66,34 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
+  Future<String?> signInWithGoogle() async {
+    if (kIsWeb) {
+      return 'Google sign-in is not supported on web yet.';
+    }
+    try {
+      final idToken = await GoogleAuthService.signInAndGetIdToken();
+      if (idToken == null) {
+        return null;
+      }
+      final err = await AuthService.loginWithGoogle(idToken);
+      if (err != null) return err;
+      _loggedIn = true;
+      notifyListeners();
+      unawaited(FirebaseMessagingService.initializeAndRegisterToken());
+      return null;
+    } on StateError catch (e) {
+      return e.message;
+    } catch (e) {
+      return 'Google sign-in failed. Please try again.';
+    }
+  }
+
   Future<void> logout() async {
+    if (!kIsWeb) {
+      try {
+        await GoogleAuthService.signOut();
+      } catch (_) {}
+    }
     await AuthService.logout();
     _loggedIn = false;
     notifyListeners();
