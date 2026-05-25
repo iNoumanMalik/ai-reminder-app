@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/reminder_provider.dart';
 import '../utils/reminder_grouping.dart';
+import '../models/reminder.dart';
 import '../widgets/reminder_card.dart';
+import '../widgets/reminder_edit_sheet.dart';
 import '../widgets/reminder_section_header.dart';
 
 class RemindersScreen extends StatefulWidget {
@@ -38,6 +40,59 @@ class _RemindersScreenState extends State<RemindersScreen> {
       await context.read<ReminderProvider>().completeReminder(id);
     } catch (_) {
       _showError('Could not update reminder. Please try again.');
+    }
+  }
+
+  Future<void> _editReminder(Reminder reminder) async {
+    final payload = await ReminderEditSheet.show(
+      context,
+      reminder: reminder,
+      title: 'Edit reminder',
+      submitLabel: 'Save changes',
+    );
+    if (payload == null || !mounted) return;
+
+    try {
+      await context.read<ReminderProvider>().updateReminder(
+            reminder.id,
+            task: payload['task'] as String,
+            localDateTime: DateTime.parse(payload['datetime'] as String).toLocal(),
+            repeat: payload['repeat'] as String?,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reminder updated')),
+      );
+    } catch (e) {
+      _showError(e.toString());
+    }
+  }
+
+  Future<void> _republishReminder(Reminder reminder) async {
+    final needsNewTime = !reminder.datetime.isAfter(DateTime.now());
+    final payload = await ReminderEditSheet.show(
+      context,
+      reminder: reminder,
+      title: 'Republish reminder',
+      submitLabel: 'Republish',
+      defaultToNextHour: needsNewTime,
+    );
+    if (payload == null || !mounted) return;
+
+    try {
+      await context.read<ReminderProvider>().republishReminder(
+            reminder.id,
+            task: payload['task'] as String,
+            localDateTime:
+                DateTime.parse(payload['datetime'] as String).toLocal(),
+            repeat: payload['repeat'] as String?,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reminder republished')),
+      );
+    } catch (e) {
+      _showError(e.toString());
     }
   }
 
@@ -173,6 +228,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           reminder: reminder,
                           clock: clock,
                           onComplete: () => _completeReminder(reminder.id),
+                          onEdit: () => _editReminder(reminder),
+                          onRepublish: reminder.canRepublish
+                              ? () => _republishReminder(reminder)
+                              : null,
                           onDelete: () => _deleteReminder(reminder.id),
                         );
                       },

@@ -32,15 +32,50 @@ class ApiService {
     throw Exception('Failed to send message: ${response.statusCode}');
   }
 
-  Future<void> patchReminder(String id, Map<String, dynamic> reminderData) async {
+  Future<Map<String, dynamic>> patchReminder(
+    String id,
+    Map<String, dynamic> reminderData,
+  ) async {
     final response = await AuthHttp.patchJson(
       Uri.parse('$baseUrl/reminders/$id'),
       reminderData,
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update reminder: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
     }
+    throw Exception(_errorBody(response, 'Failed to update reminder'));
+  }
+
+  Future<Map<String, dynamic>> republishReminder(
+    String id, {
+    String? task,
+    String? datetimeUtcIso,
+    String? repeat,
+  }) async {
+    final body = <String, dynamic>{};
+    if (task != null) body['task'] = task;
+    if (datetimeUtcIso != null) body['datetime'] = datetimeUtcIso;
+    if (repeat != null) body['repeat'] = repeat;
+    final response = await AuthHttp.postJson(
+      Uri.parse('$baseUrl/reminders/$id/republish'),
+      body,
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(_errorBody(response, 'Failed to republish reminder'));
+  }
+
+  static String _errorBody(http.Response response, String fallback) {
+    try {
+      final map = jsonDecode(response.body);
+      if (map is Map && map['detail'] != null) {
+        return map['detail'].toString();
+      }
+    } catch (_) {}
+    return '$fallback (${response.statusCode})';
   }
 
   Future<void> createReminder(Map<String, dynamic> reminderData) async {

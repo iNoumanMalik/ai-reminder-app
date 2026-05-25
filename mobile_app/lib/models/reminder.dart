@@ -30,6 +30,11 @@ class Reminder {
   String get formattedTime => DateFormat('HH:mm').format(datetime);
   bool get isCompleted => status == 'completed';
 
+  bool get canRepublish =>
+      status == 'completed' ||
+      status == 'triggered' ||
+      status == 'failed';
+
   /// Title-cased task for display in the reminders list.
   String get displayTask => toTitleCaseWords(task);
 }

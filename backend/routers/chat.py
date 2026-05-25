@@ -128,19 +128,13 @@ async def process_chat(
             task = parsed["task"]
             date = parsed["date"]
             time_str = parsed["time"]
-            reply = f"Updating that reminder: \"{task}\" on {date} at {time_str}."
-            return schemas.ChatResponse(
-                reply=reply,
-                parsed_reminder=None,
-                client_action={
-                    "type": "patch_reminder",
-                    "reminder_id": str(eid),
-                    "task": task,
-                    "date": date,
-                    "time": time_str,
-                    "repeat": parsed.get("repeat"),
-                },
+            reply = (
+                f"Update your reminder to \"{task}\" on {date} at {time_str}? "
+                "Tap yes to save the change."
             )
+            draft = _client_reminder_draft(parsed, confirmable=True)
+            draft["edit_reminder_id"] = str(eid)
+            return schemas.ChatResponse(reply=reply, parsed_reminder=draft)
         reply = (
             "I couldn't match that to one of your saved reminders. "
             "Open the Reminders tab so your list is up to date, or name the task clearly."

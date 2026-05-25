@@ -96,20 +96,75 @@ def update_reminder(
     db_reminder = _reminder_for_user(db, reminder_id, current_user.id)
     if not db_reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
+    rescheduled = False
     if body.task is not None:
         db_reminder.task = body.task
     if body.datetime is not None:
+        if body.datetime != db_reminder.datetime:
+            rescheduled = True
         db_reminder.datetime = body.datetime
     if body.repeat is not None:
-        db_reminder.repeat = body.repeat
+        db_reminder.repeat = body.repeat if body.repeat.strip() else None
+    cleared = 0
+    if rescheduled:
+        cleared = _reset_for_reschedule(db, db_reminder)
     db.commit()
     db.refresh(db_reminder)
     logger.info(
-        "event=reminder_updated user_id=%s reminder_id=%s scheduled_at=%s repeat=%s",
+        "event=reminder_updated user_id=%s reminder_id=%s scheduled_at=%s repeat=%s "
+        "rescheduled=%s cleared_delivery_attempts=%s",
         current_user.id,
         db_reminder.id,
         db_reminder.datetime,
         db_reminder.repeat,
+        rescheduled,
+        cleared,
+    )
+    return db_reminder
+
+
+@router.post("/{reminder_id}/republish", response_model=schemas.ReminderResponse)
+def republish_reminder(
+    reminder_id: UUID,
+    body: schemas.ReminderRepublish,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    db_reminder = _reminder_for_user(db, reminder_id, current_user.id)
+    if not db_reminder:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+
+    now = datetime.now(timezone.utc)
+    if body.task is not None:
+        cleaned = body.task.strip()
+        if not cleaned:
+            raise HTTPException(status_code=400, detail="Task cannot be empty")
+        db_reminder.task = cleaned
+    if body.repeat is not None:
+        db_reminder.repeat = body.repeat.strip() or None
+    if body.datetime is not None:
+        if body.datetime <= now:
+            raise HTTPException(
+                status_code=400,
+                detail="Scheduled time must be in the future",
+            )
+        db_reminder.datetime = body.datetime
+    elif db_reminder.datetime <= now:
+        raise HTTPException(
+            status_code=400,
+            detail="Reminder time is in the past. Set a new date and time to republish.",
+        )
+
+    cleared = _reset_for_reschedule(db, db_reminder)
+    db.commit()
+    db.refresh(db_reminder)
+    logger.info(
+        "event=reminder_republished user_id=%s reminder_id=%s scheduled_at=%s "
+        "cleared_delivery_attempts=%s",
+        current_user.id,
+        reminder_id,
+        db_reminder.datetime,
+        cleared,
     )
     return db_reminder
 
@@ -136,6 +191,18 @@ def complete_reminder(
         reminder_id,
     )
     return db_reminder
+
+
+def _reset_for_reschedule(db: Session, reminder: models.Reminder) -> int:
+    """Return reminder to pending and clear delivery state for a new fire time."""
+    cleared = _clear_delivery_history(db, reminder.id)
+    reminder.status = models.ReminderStatus.PENDING.value
+    reminder.triggered_at = None
+    reminder.processing_started_at = None
+    reminder.next_attempt_at = None
+    reminder.attempt_count = 0
+    reminder.last_error = None
+    return cleared
 
 
 def _clear_delivery_history(db: Session, reminder_id: UUID) -> int:

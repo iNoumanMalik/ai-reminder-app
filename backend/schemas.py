@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime, timezone
+
+# Avoid field name `datetime` shadowing the `datetime` type in Optional[datetime].
+DateTime = datetime
 from uuid import UUID
 from typing import Any, Optional
 from models import ReminderStatus
@@ -79,12 +84,29 @@ class ReminderSnooze(BaseModel):
 
 class ReminderUpdate(BaseModel):
     task: Optional[str] = None
-    datetime: Optional[datetime] = None
+    datetime: Optional[DateTime] = None
     repeat: Optional[str] = None
 
     @field_validator("datetime")
     @classmethod
-    def datetime_as_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+    def datetime_as_utc(cls, v: Optional[DateTime]) -> Optional[DateTime]:
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)
+
+
+class ReminderRepublish(BaseModel):
+    """Re-activate a reminder for scheduling (optional field updates)."""
+
+    task: Optional[str] = None
+    datetime: Optional[DateTime] = None
+    repeat: Optional[str] = None
+
+    @field_validator("datetime")
+    @classmethod
+    def datetime_as_utc(cls, v: Optional[DateTime]) -> Optional[DateTime]:
         if v is None:
             return None
         if v.tzinfo is None:

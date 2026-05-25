@@ -44,4 +44,49 @@ class ReminderProvider with ChangeNotifier {
     _reminders.removeWhere((r) => r.id == id);
     notifyListeners();
   }
+
+  void _upsertReminder(Reminder updated) {
+    final index = _reminders.indexWhere((r) => r.id == updated.id);
+    if (index == -1) {
+      _reminders.add(updated);
+    } else {
+      _reminders[index] = updated;
+    }
+    _reminders.sort((a, b) => a.datetime.compareTo(b.datetime));
+  }
+
+  Future<Reminder> updateReminder(
+    String id, {
+    required String task,
+    required DateTime localDateTime,
+    String? repeat,
+  }) async {
+    final json = await _apiService.patchReminder(id, {
+      'task': task,
+      'datetime': localDateTime.toUtc().toIso8601String(),
+      'repeat': repeat,
+    });
+    final updated = Reminder.fromJson(json);
+    _upsertReminder(updated);
+    notifyListeners();
+    return updated;
+  }
+
+  Future<Reminder> republishReminder(
+    String id, {
+    String? task,
+    DateTime? localDateTime,
+    String? repeat,
+  }) async {
+    final json = await _apiService.republishReminder(
+      id,
+      task: task,
+      datetimeUtcIso: localDateTime?.toUtc().toIso8601String(),
+      repeat: repeat,
+    );
+    final updated = Reminder.fromJson(json);
+    _upsertReminder(updated);
+    notifyListeners();
+    return updated;
+  }
 }

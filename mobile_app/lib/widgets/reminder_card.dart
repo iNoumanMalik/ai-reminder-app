@@ -6,6 +6,8 @@ class ReminderCard extends StatelessWidget {
   final Reminder reminder;
   final DateTime clock;
   final VoidCallback onComplete;
+  final VoidCallback onEdit;
+  final VoidCallback? onRepublish;
   final VoidCallback onDelete;
 
   const ReminderCard({
@@ -13,6 +15,8 @@ class ReminderCard extends StatelessWidget {
     required this.reminder,
     required this.clock,
     required this.onComplete,
+    required this.onEdit,
+    this.onRepublish,
     required this.onDelete,
   });
 
@@ -67,9 +71,26 @@ class ReminderCard extends StatelessWidget {
                     fontWeight: overdue ? FontWeight.w600 : null,
                   ),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                  onPressed: onDelete,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      tooltip: 'Edit',
+                      onPressed: onEdit,
+                    ),
+                    if (onRepublish != null)
+                      IconButton(
+                        icon: const Icon(Icons.notifications_active_outlined),
+                        tooltip: 'Republish',
+                        onPressed: onRepublish,
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      tooltip: 'Delete',
+                      onPressed: onDelete,
+                    ),
+                  ],
                 ),
               ),
             ),

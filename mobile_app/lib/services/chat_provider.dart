@@ -56,6 +56,9 @@ class ChatProvider with ChangeNotifier {
   ) {
     final confirmable = draft['confirmable'];
     if (confirmable == true) {
+      if (draft['edit_reminder_id'] != null) {
+        return 'Should I update this reminder? Tap yes or no.';
+      }
       return 'Should I save this reminder? Tap yes or no.';
     }
     final time = draft['time'];
@@ -82,40 +85,6 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  DateTime _localDateTimeFromDraft(Map<String, dynamic> action) {
-    final String date = action['date'] as String;
-    final String time = action['time'] as String;
-    final normalizedTime = time.length == 5 ? '$time:00' : time;
-    return DateTime.parse('${date}T$normalizedTime');
-  }
-
-  Future<void> _applyClientAction(Map<String, dynamic> action) async {
-    final type = action['type']?.toString();
-    if (type != 'patch_reminder') return;
-
-    final id = action['reminder_id']?.toString();
-    if (id == null || id.isEmpty) return;
-
-    final task = action['task'] as String?;
-    if (task == null) return;
-
-    final local = _localDateTimeFromDraft({
-      'date': action['date'],
-      'time': action['time'],
-    });
-
-    final payload = <String, dynamic>{
-      'task': task,
-      'datetime': local.toUtc().toIso8601String(),
-    };
-    final repeat = action['repeat'];
-    if (repeat != null) {
-      payload['repeat'] = repeat;
-    }
-
-    await _apiService.patchReminder(id, payload);
-  }
-
   Future<void> sendMessage(String text) async {
     addMessage(Message(
       text: text,
@@ -133,22 +102,7 @@ class ChatProvider with ChangeNotifier {
       );
 
       final reply = response['reply'] as String? ?? '';
-      final clientAction = response['client_action'];
       final parsedReminder = response['parsed_reminder'];
-
-      if (clientAction is Map) {
-        try {
-          await _applyClientAction(Map<String, dynamic>.from(clientAction));
-          _pendingContext = null;
-          _addAssistantMessage(
-            reply,
-            ttsPhrase: 'Reminder updated.',
-          );
-        } catch (e) {
-          _addAssistantMessage('Could not update reminder: $e');
-        }
-        return;
-      }
 
       if (parsedReminder is Map) {
         final draft = Map<String, dynamic>.from(parsedReminder);
@@ -185,9 +139,9 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  Future<void> confirmReminder(Map<String, dynamic> reminderData) async {
+  Future<bool> confirmReminder(Map<String, dynamic> reminderData) async {
     if (reminderData['confirmable'] == false) {
-      return;
+      return false;
     }
 
     _isLoading = true;
@@ -199,25 +153,44 @@ class ChatProvider with ChangeNotifier {
           reminderData['date'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
       final String time = reminderData['time'] ?? '00:00';
       final String? repeat = reminderData['repeat'] as String?;
+      final editId = reminderData['edit_reminder_id']?.toString();
 
       final normalizedTime = time.length == 5 ? '$time:00' : time;
       final DateTime local = DateTime.parse('${date}T$normalizedTime');
 
-      await _apiService.createReminder({
-        'task': task,
-        'datetime': local.toUtc().toIso8601String(),
-        'repeat': repeat,
-      });
-
-      _clearPendingReminderFor(reminderData);
-      _pendingContext = null;
-
-      _addAssistantMessage(
-        "Reminder saved! I'll remind you to $task on $date at $time.",
-        ttsPhrase: 'Reminder saved.',
-      );
+      if (editId != null && editId.isNotEmpty) {
+        await _apiService.patchReminder(editId, {
+          'task': task,
+          'datetime': local.toUtc().toIso8601String(),
+          'repeat': repeat,
+        });
+        _clearPendingReminderFor(reminderData);
+        _pendingContext = null;
+        _addAssistantMessage(
+          'Reminder updated: "$task" on $date at $time.',
+          ttsPhrase: 'Reminder updated.',
+        );
+      } else {
+        await _apiService.createReminder({
+          'task': task,
+          'datetime': local.toUtc().toIso8601String(),
+          'repeat': repeat,
+        });
+        _clearPendingReminderFor(reminderData);
+        _pendingContext = null;
+        _addAssistantMessage(
+          "Reminder saved! I'll remind you to $task on $date at $time.",
+          ttsPhrase: 'Reminder saved.',
+        );
+      }
+      return true;
     } catch (e) {
-      _addAssistantMessage('Failed to save reminder: $e');
+      _addAssistantMessage(
+        reminderData['edit_reminder_id'] != null
+            ? 'Failed to update reminder: $e'
+            : 'Failed to save reminder: $e',
+      );
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();

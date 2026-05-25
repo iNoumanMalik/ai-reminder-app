@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/message.dart';
 import '../services/chat_provider.dart';
+import '../services/reminder_provider.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
@@ -16,6 +17,7 @@ class MessageBubble extends StatelessWidget {
     bool isUser = message.isUser;
     final pending = message.pendingReminder;
     final bool showConfirm = pending != null && pending['confirmable'] != false;
+    final bool isEdit = pending?['edit_reminder_id'] != null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -50,8 +52,17 @@ class MessageBubble extends StatelessWidget {
               child: Row(
                 children: [
                   ElevatedButton(
-                    onPressed: () {
-                      context.read<ChatProvider>().confirmReminder(message.pendingReminder!);
+                    onPressed: () async {
+                      final ok = await context
+                          .read<ChatProvider>()
+                          .confirmReminder(message.pendingReminder!);
+                      if (ok && context.mounted) {
+                        // Keep reminders list in sync after chat edit/create.
+                        try {
+                          // ignore: use_build_context_synchronously
+                          await context.read<ReminderProvider>().fetchReminders();
+                        } catch (_) {}
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6750A4),
@@ -60,7 +71,7 @@ class MessageBubble extends StatelessWidget {
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const Text("Yes, remind me"),
+                    child: Text(isEdit ? 'Yes, update' : 'Yes, remind me'),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
