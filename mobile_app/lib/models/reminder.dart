@@ -1,5 +1,7 @@
 import 'package:intl/intl.dart';
 
+import '../utils/repeat_options.dart';
+
 class Reminder {
   final String id;
   final String task;
@@ -29,6 +31,10 @@ class Reminder {
   String get formattedDate => DateFormat('yyyy-MM-dd').format(datetime);
   String get formattedTime => DateFormat('HH:mm').format(datetime);
   bool get isCompleted => status == 'completed';
+
+  bool get isRepeating => normalizeRepeatValue(repeat) != null;
+
+  String? get repeatLabel => repeatDisplayLabel(repeat);
 
   bool get canRepublish =>
       status == 'completed' ||

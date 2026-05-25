@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 import models
 from database import Base
-from routers.reminders import _clear_delivery_history
+from services.reminder_state import clear_delivery_history
 from services.scheduler import _utcnow, delivery_dedupe_key
 
 
@@ -62,7 +62,7 @@ def test_snooze_clears_delivery_attempts(db_session):
     )
     session.commit()
 
-    cleared = _clear_delivery_history(session, reminder.id)
+    cleared = clear_delivery_history(session, reminder.id)
     session.commit()
 
     remaining = (

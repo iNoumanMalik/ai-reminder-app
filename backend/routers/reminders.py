@@ -10,10 +10,38 @@ from database import get_db
 from deps import get_current_user
 import models
 import schemas
+from services.reminder_state import clear_delivery_history, reset_for_reschedule
+from services.repeat_schedule import (
+    next_occurrence_after,
+    normalize_repeat,
+    repeat_label,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _reschedule_repeating_reminder(
+    db: Session, reminder: models.Reminder, now: datetime
+) -> bool:
+    """Advance a repeating reminder to its next occurrence. Returns True if rescheduled."""
+    if not normalize_repeat(reminder.repeat):
+        return False
+    next_dt = next_occurrence_after(reminder.repeat, reminder.datetime, after=now)
+    if next_dt is None:
+        return False
+    cleared = reset_for_reschedule(db, reminder)
+    reminder.datetime = next_dt
+    logger.info(
+        "event=repeat_rescheduled reminder_id=%s rule=%s next_datetime=%s "
+        "cleared_delivery_attempts=%s",
+        reminder.id,
+        reminder.repeat,
+        next_dt,
+        cleared,
+    )
+    return True
 
 
 @router.post("", response_model=schemas.ReminderResponse)
@@ -25,7 +53,7 @@ def create_reminder(
     db_reminder = models.Reminder(
         task=reminder.task,
         datetime=reminder.datetime,
-        repeat=reminder.repeat,
+        repeat=normalize_repeat(reminder.repeat),
         user_id=current_user.id,
         status=models.ReminderStatus.PENDING.value,
     )
@@ -104,10 +132,10 @@ def update_reminder(
             rescheduled = True
         db_reminder.datetime = body.datetime
     if body.repeat is not None:
-        db_reminder.repeat = body.repeat if body.repeat.strip() else None
+        db_reminder.repeat = normalize_repeat(body.repeat)
     cleared = 0
     if rescheduled:
-        cleared = _reset_for_reschedule(db, db_reminder)
+        cleared = reset_for_reschedule(db, db_reminder)
     db.commit()
     db.refresh(db_reminder)
     logger.info(
@@ -141,7 +169,7 @@ def republish_reminder(
             raise HTTPException(status_code=400, detail="Task cannot be empty")
         db_reminder.task = cleaned
     if body.repeat is not None:
-        db_reminder.repeat = body.repeat.strip() or None
+        db_reminder.repeat = normalize_repeat(body.repeat)
     if body.datetime is not None:
         if body.datetime <= now:
             raise HTTPException(
@@ -179,6 +207,19 @@ def complete_reminder(
     if not db_reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
 
+    now = datetime.now(timezone.utc)
+    if _reschedule_repeating_reminder(db, db_reminder, now):
+        db.commit()
+        db.refresh(db_reminder)
+        logger.info(
+            "event=reminder_repeat_advanced user_id=%s reminder_id=%s rule=%s next=%s",
+            current_user.id,
+            reminder_id,
+            db_reminder.repeat,
+            db_reminder.datetime,
+        )
+        return db_reminder
+
     db_reminder.status = models.ReminderStatus.COMPLETED.value
     db_reminder.processing_started_at = None
     db_reminder.next_attempt_at = None
@@ -191,27 +232,6 @@ def complete_reminder(
         reminder_id,
     )
     return db_reminder
-
-
-def _reset_for_reschedule(db: Session, reminder: models.Reminder) -> int:
-    """Return reminder to pending and clear delivery state for a new fire time."""
-    cleared = _clear_delivery_history(db, reminder.id)
-    reminder.status = models.ReminderStatus.PENDING.value
-    reminder.triggered_at = None
-    reminder.processing_started_at = None
-    reminder.next_attempt_at = None
-    reminder.attempt_count = 0
-    reminder.last_error = None
-    return cleared
-
-
-def _clear_delivery_history(db: Session, reminder_id: UUID) -> int:
-    deleted = (
-        db.query(models.DeliveryAttempt)
-        .filter(models.DeliveryAttempt.reminder_id == reminder_id)
-        .delete(synchronize_session=False)
-    )
-    return deleted
 
 
 @router.post("/{reminder_id}/snooze", response_model=schemas.ReminderResponse)
@@ -230,7 +250,7 @@ def snooze_reminder(
     previous_datetime = db_reminder.datetime
     new_datetime = now + timedelta(minutes=body.minutes)
 
-    cleared = _clear_delivery_history(db, reminder_id)
+    cleared = clear_delivery_history(db, reminder_id)
     db_reminder.datetime = new_datetime
     db_reminder.status = models.ReminderStatus.PENDING.value
     db_reminder.triggered_at = None

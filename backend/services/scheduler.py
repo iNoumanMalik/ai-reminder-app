@@ -8,6 +8,8 @@ from database import SessionLocal
 import models
 import logging
 from services.notifications import send_push_notification
+from services.reminder_state import reset_for_reschedule
+from services.repeat_schedule import next_occurrence_after, normalize_repeat
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +128,22 @@ def _release_processing_to_pending(
         )
 
 
-def _mark_triggered(reminder: models.Reminder, now: datetime) -> None:
+def _mark_triggered(
+    db: Session, reminder: models.Reminder, now: datetime
+) -> None:
+    if normalize_repeat(reminder.repeat):
+        next_dt = next_occurrence_after(reminder.repeat, reminder.datetime, after=now)
+        if next_dt is not None:
+            reset_for_reschedule(db, reminder)
+            reminder.datetime = next_dt
+            logger.info(
+                "event=repeat_rescheduled reminder_id=%s rule=%s next_datetime=%s",
+                reminder.id,
+                reminder.repeat,
+                next_dt,
+            )
+            return
+
     reminder.status = models.ReminderStatus.TRIGGERED.value
     reminder.triggered_at = now
     reminder.next_attempt_at = None
@@ -166,7 +183,7 @@ def _process_reminder(db: Session, reminder: models.Reminder, now: datetime) -> 
             reminder.id,
             reminder.user_id,
         )
-        _mark_triggered(reminder, now)
+        _mark_triggered(db, reminder, now)
         return
 
     device_tokens = (
@@ -285,7 +302,7 @@ def _process_reminder(db: Session, reminder: models.Reminder, now: datetime) -> 
     reminder.attempt_count = (reminder.attempt_count or 0) + 1
 
     if delivered:
-        _mark_triggered(reminder, now)
+        _mark_triggered(db, reminder, now)
         return
 
     if sends_attempted == 0 and device_tokens:

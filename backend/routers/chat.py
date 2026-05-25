@@ -12,6 +12,7 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from ai_service.extractor import extract_reminder_details
+from services.repeat_schedule import repeat_label
 
 from database import get_db
 from deps import get_current_user
@@ -166,7 +167,12 @@ async def process_chat(
     task = parsed.get("task", "your task")
     date = parsed.get("date", "")
     time_str = parsed.get("time", "")
-    reply = f"Should I remind you to {task} on {date} at {time_str}?"
+    repeat_hint = ""
+    if parsed.get("repeat"):
+        label = repeat_label(parsed.get("repeat"))
+        if label:
+            repeat_hint = f" ({label.lower()})"
+    reply = f"Should I remind you to {task} on {date} at {time_str}{repeat_hint}?"
     return schemas.ChatResponse(
         reply=reply,
         parsed_reminder=_client_reminder_draft(parsed, confirmable=True),

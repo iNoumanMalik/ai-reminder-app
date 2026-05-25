@@ -3,6 +3,7 @@ import '../models/message.dart';
 import 'api_service.dart';
 import 'package:intl/intl.dart';
 import 'tts_service.dart';
+import '../utils/repeat_options.dart';
 
 class ChatProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -158,28 +159,32 @@ class ChatProvider with ChangeNotifier {
       final normalizedTime = time.length == 5 ? '$time:00' : time;
       final DateTime local = DateTime.parse('${date}T$normalizedTime');
 
+      final repeatLabel = repeatDisplayLabel(repeat);
+      final repeatNote =
+          repeatLabel != null ? ' Repeats $repeatLabel.' : '';
+
       if (editId != null && editId.isNotEmpty) {
         await _apiService.patchReminder(editId, {
           'task': task,
           'datetime': local.toUtc().toIso8601String(),
-          'repeat': repeat,
+          'repeat': normalizeRepeatValue(repeat),
         });
         _clearPendingReminderFor(reminderData);
         _pendingContext = null;
         _addAssistantMessage(
-          'Reminder updated: "$task" on $date at $time.',
+          'Reminder updated: "$task" on $date at $time.$repeatNote',
           ttsPhrase: 'Reminder updated.',
         );
       } else {
         await _apiService.createReminder({
           'task': task,
           'datetime': local.toUtc().toIso8601String(),
-          'repeat': repeat,
+          'repeat': normalizeRepeatValue(repeat),
         });
         _clearPendingReminderFor(reminderData);
         _pendingContext = null;
         _addAssistantMessage(
-          "Reminder saved! I'll remind you to $task on $date at $time.",
+          "Reminder saved! I'll remind you to $task on $date at $time.$repeatNote",
           ttsPhrase: 'Reminder saved.',
         );
       }

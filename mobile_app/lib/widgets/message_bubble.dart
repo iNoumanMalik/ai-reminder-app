@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/message.dart';
 import '../services/chat_provider.dart';
 import '../services/reminder_provider.dart';
+import '../utils/repeat_options.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
@@ -46,7 +47,18 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
           ),
-          if (showConfirm)
+          if (showConfirm) ...[
+            if (_pendingSummary(pending) != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4),
+                child: Text(
+                  _pendingSummary(pending)!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(top: 8.0, left: 4.0),
               child: Row(
@@ -83,9 +95,21 @@ class MessageBubble extends StatelessWidget {
                 ],
               ),
             ),
+          ],
         ],
       ),
     );
+  }
+
+  String? _pendingSummary(Map<String, dynamic>? draft) {
+    if (draft == null) return null;
+    final task = draft['task']?.toString();
+    final date = draft['date']?.toString();
+    final time = draft['time']?.toString();
+    if (task == null || date == null || time == null) return null;
+    final repeat = repeatDisplayLabel(draft['repeat']?.toString());
+    final repeatPart = repeat != null ? ' · $repeat' : ' · One time';
+    return '$task — $date $time$repeatPart';
   }
 }
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from services.repeat_schedule import validate_repeat_field
 from datetime import datetime, timezone
 
 # Avoid field name `datetime` shadowing the `datetime` type in Optional[datetime].
@@ -40,6 +42,11 @@ class ReminderCreate(BaseModel):
     task: str
     datetime: datetime
     repeat: Optional[str] = None
+
+    @field_validator("repeat")
+    @classmethod
+    def validate_repeat(cls, v: Optional[str]) -> Optional[str]:
+        return validate_repeat_field(v)
 
     @field_validator("datetime")
     @classmethod
@@ -87,6 +94,11 @@ class ReminderUpdate(BaseModel):
     datetime: Optional[DateTime] = None
     repeat: Optional[str] = None
 
+    @field_validator("repeat")
+    @classmethod
+    def validate_repeat(cls, v: Optional[str]) -> Optional[str]:
+        return validate_repeat_field(v)
+
     @field_validator("datetime")
     @classmethod
     def datetime_as_utc(cls, v: Optional[DateTime]) -> Optional[DateTime]:
@@ -103,6 +115,11 @@ class ReminderRepublish(BaseModel):
     task: Optional[str] = None
     datetime: Optional[DateTime] = None
     repeat: Optional[str] = None
+
+    @field_validator("repeat")
+    @classmethod
+    def validate_repeat(cls, v: Optional[str]) -> Optional[str]:
+        return validate_repeat_field(v)
 
     @field_validator("datetime")
     @classmethod

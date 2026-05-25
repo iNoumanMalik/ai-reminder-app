@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/reminder.dart';
+import '../utils/repeat_options.dart';
 
 /// Bottom sheet to edit or republish a reminder (task, date, time, repeat).
 class ReminderEditSheet extends StatefulWidget {
@@ -51,7 +52,7 @@ class ReminderEditSheet extends StatefulWidget {
 
 class _ReminderEditSheetState extends State<ReminderEditSheet> {
   late final TextEditingController _taskController;
-  late final TextEditingController _repeatController;
+  String? _selectedRepeat;
   late DateTime _selectedLocal;
   String? _error;
 
@@ -59,7 +60,7 @@ class _ReminderEditSheetState extends State<ReminderEditSheet> {
   void initState() {
     super.initState();
     _taskController = TextEditingController(text: widget.reminder.task);
-    _repeatController = TextEditingController(text: widget.reminder.repeat ?? '');
+    _selectedRepeat = normalizeRepeatValue(widget.reminder.repeat);
     _selectedLocal = widget.reminder.datetime;
     if (widget.defaultToNextHour) {
       final now = DateTime.now();
@@ -70,7 +71,6 @@ class _ReminderEditSheetState extends State<ReminderEditSheet> {
   @override
   void dispose() {
     _taskController.dispose();
-    _repeatController.dispose();
     super.dispose();
   }
 
@@ -122,11 +122,10 @@ class _ReminderEditSheetState extends State<ReminderEditSheet> {
       setState(() => _error = 'Choose a date and time in the future.');
       return;
     }
-    final repeat = _repeatController.text.trim();
     Navigator.pop(context, {
       'task': task,
       'datetime': _selectedLocal.toUtc().toIso8601String(),
-      'repeat': repeat.isEmpty ? null : repeat,
+      'repeat': _selectedRepeat,
     });
   }
 
@@ -176,14 +175,34 @@ class _ReminderEditSheetState extends State<ReminderEditSheet> {
               ],
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _repeatController,
+            DropdownButtonFormField<String?>(
+              value: _selectedRepeat,
               decoration: const InputDecoration(
-                labelText: 'Repeat (optional)',
-                hintText: 'e.g. daily, weekly',
+                labelText: 'Repeat',
                 border: OutlineInputBorder(),
               ),
+              items: kRepeatOptions
+                  .map(
+                    (opt) => DropdownMenuItem<String?>(
+                      value: opt.value,
+                      child: Text(opt.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setState(() => _selectedRepeat = value),
             ),
+            if (_selectedRepeat != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                kRepeatOptions
+                    .firstWhere((o) => o.value == _selectedRepeat)
+                    .hint,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(

@@ -14,9 +14,31 @@ def _today_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def _normalize_repeat_value(value) -> Optional[str]:
+    try:
+        import os
+        import sys
+
+        backend_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "backend")
+        )
+        if backend_root not in sys.path:
+            sys.path.insert(0, backend_root)
+        from services.repeat_schedule import normalize_repeat
+
+        return normalize_repeat(value if value is None else str(value))
+    except Exception:
+        if value is None:
+            return None
+        cleaned = str(value).strip().lower()
+        return cleaned if cleaned in {"daily", "weekly", "weekdays", "monthly"} else None
+
+
 def _normalize_parsed(raw: dict) -> dict:
     """Fill defaults and normalize flags from model output."""
     out = dict(raw)
+    if "repeat" in out:
+        out["repeat"] = _normalize_repeat_value(out.get("repeat"))
     for key in (
         "task",
         "date",
@@ -126,6 +148,16 @@ def get_mock_reminder(
     if "this evening" in text or "evening" in text:
         time_str = time_str or "18:30"
 
+    if not repeat:
+        if re.search(r"\b(daily|every day|each day)\b", text):
+            repeat = "daily"
+        elif re.search(r"\b(weekly|every week)\b", text):
+            repeat = "weekly"
+        elif re.search(r"\b(weekdays?|mon-?fri)\b", text):
+            repeat = "weekdays"
+        elif re.search(r"\b(monthly|every month)\b", text):
+            repeat = "monthly"
+
     if not time_str:
         hm = re.search(r"\b(\d{1,2}):(\d{2})\b", message)
         if hm:
@@ -211,6 +243,7 @@ Rules:
 - If ambiguous (e.g. "3" could be AM/PM), set needs_clarification true and ask one short question in clarification_question.
 - If you cannot determine the task at all, needs_clarification true and clarification_question helpful.
 - For edit_saved: if the user clearly refers to one of the listed reminders, set intent "edit_saved", editable_reminder_id to that id, and new task/date/time/repeat as appropriate.
+- For repeat: use only null, "daily", "weekly", "weekdays", or "monthly". Examples: "every day" -> daily, "every Monday" still -> weekly (same weekday each week), "on weekdays" -> weekdays.
 - Otherwise intent "create" for a new reminder.
 
 IMPORTANT: Raw JSON only, no code fences.
