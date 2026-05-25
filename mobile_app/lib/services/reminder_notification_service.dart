@@ -79,7 +79,7 @@ class ReminderNotificationService {
     if (launchDetails?.didNotificationLaunchApp ?? false) {
       final launchResponse = launchDetails?.notificationResponse;
       if (launchResponse != null) {
-        await NotificationRouter.handleResponse(launchResponse);
+        await NotificationRouter.handleLaunchResponse(launchResponse);
       }
     }
 

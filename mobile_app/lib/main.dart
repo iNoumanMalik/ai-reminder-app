@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'services/notification_background.dart';
+import 'services/notification_deep_link.dart';
 import 'services/reminder_notification_service.dart';
 import 'package:timezone/data/latest_all.dart';
 import 'screens/login_screen.dart';
@@ -26,6 +27,15 @@ Future<void> main() async {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     await ReminderNotificationService.ensureInitialized();
+
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      final reminderId = initialMessage.data['reminder_id']?.toString();
+      if (reminderId != null && reminderId.isNotEmpty) {
+        await NotificationDeepLink.storePending(reminderId);
+      }
+    }
+    await NotificationDeepLink.loadFromDisk();
   }
 
   runApp(

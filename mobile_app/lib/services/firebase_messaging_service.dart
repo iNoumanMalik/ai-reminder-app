@@ -4,7 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import 'device_service.dart';
-import 'notification_router.dart';
+import 'notification_deep_link.dart';
 import 'reminder_notification_service.dart';
 
 class FirebaseMessagingService {
@@ -30,13 +30,12 @@ class FirebaseMessagingService {
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        NotificationRouter.handleFcmData(message.data);
+        final reminderId = message.data['reminder_id']?.toString();
+        if (reminderId != null && reminderId.isNotEmpty) {
+          NotificationDeepLink.requestOpen(reminderId);
+        }
       });
 
-      final initialMessage = await messaging.getInitialMessage();
-      if (initialMessage != null) {
-        NotificationRouter.handleFcmData(initialMessage.data);
-      }
     }
 
     final token = await messaging.getToken().timeout(

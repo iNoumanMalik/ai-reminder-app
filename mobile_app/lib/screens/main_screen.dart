@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'chat_screen.dart';
@@ -15,38 +17,67 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+  late int _selectedIndex;
   final GlobalKey<RemindersScreenState> _remindersKey =
       GlobalKey<RemindersScreenState>();
 
   @override
   void initState() {
     super.initState();
+    // Open Reminders tab first when app was launched from a notification body tap.
+    _selectedIndex = NotificationDeepLink.hasPending ? 1 : 0;
+    WidgetsBinding.instance.addObserver(this);
+
     NotificationActionHandler.onRemindersChanged = () {
       if (!mounted) return;
       context.read<ReminderProvider>().fetchReminders();
     };
     NotificationDeepLink.onOpenReminder = _openReminderFromNotification;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationDeepLink.consumePending();
+      unawaited(_consumeNotificationDeepLink());
     });
+  }
+
+  Future<void> _consumeNotificationDeepLink() async {
+    await NotificationDeepLink.loadFromDisk();
+    if (!mounted) return;
+    if (NotificationDeepLink.hasPending && _selectedIndex != 1) {
+      setState(() => _selectedIndex = 1);
+    }
+    await NotificationDeepLink.consumePending();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     NotificationActionHandler.onRemindersChanged = null;
     NotificationDeepLink.onOpenReminder = null;
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_consumeNotificationDeepLink());
+    }
+  }
+
   void _openReminderFromNotification(String reminderId) {
     if (!mounted) return;
-    setState(() => _selectedIndex = 1);
-    context.read<ReminderProvider>().openReminderInList(reminderId).then((_) {
+
+    void navigate() {
       if (!mounted) return;
-      _remindersKey.currentState?.scrollToReminder(reminderId);
-    });
+      setState(() => _selectedIndex = 1);
+      context.read<ReminderProvider>().openReminderInList(reminderId).then((_) {
+        if (!mounted) return;
+        _remindersKey.currentState?.scrollToReminder(reminderId);
+      });
+    }
+
+    navigate();
+    WidgetsBinding.instance.addPostFrameCallback((_) => navigate());
   }
 
   List<Widget> get _screens => [
