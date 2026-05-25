@@ -183,7 +183,7 @@ def republish_reminder(
             detail="Reminder time is in the past. Set a new date and time to republish.",
         )
 
-    cleared = _reset_for_reschedule(db, db_reminder)
+    cleared = reset_for_reschedule(db, db_reminder)
     db.commit()
     db.refresh(db_reminder)
     logger.info(
