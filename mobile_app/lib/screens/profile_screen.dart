@@ -198,11 +198,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           return ListView(
             children: [
+              if (!profile.emailVerified) ...[
+                Card(
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Verify your email',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Check your inbox for a verification link, or resend it below.',
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonal(
+                          onPressed: provider.isSaving
+                              ? null
+                              : () async {
+                                  final err = await context
+                                      .read<AuthProvider>()
+                                      .resendVerificationEmail();
+                                  if (!mounted) return;
+                                  if (err != null) {
+                                    _showError(err);
+                                  } else {
+                                    _showSuccess(
+                                      'Verification email sent.',
+                                    );
+                                  }
+                                },
+                          child: const Text('Resend verification email'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               _sectionHeader('ACCOUNT'),
               ListTile(
                 leading: const Icon(Icons.email_outlined),
                 title: const Text('Email'),
                 subtitle: Text(profile.email),
+                trailing: profile.emailVerified
+                    ? Icon(
+                        Icons.verified,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 22,
+                      )
+                    : null,
               ),
               _sectionHeader('PREFERENCES'),
               SwitchListTile(

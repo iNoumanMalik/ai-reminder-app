@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
+import 'auth_http.dart';
 import 'auth_storage.dart';
 
 class AuthService {
@@ -123,6 +124,93 @@ class AuthService {
     }
     if (response.statusCode == 429) {
       return 'Too many attempts. Try again in a minute.';
+    }
+    return _errorMessage(response);
+  }
+
+  static Future<String?> forgotPassword(String email) async {
+    final response = await http
+        .post(
+          Uri.parse('$_base/auth/forgot-password'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email.trim()}),
+        )
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => http.Response('', 408),
+        );
+
+    if (response.statusCode == 200) {
+      return null;
+    }
+    if (response.statusCode == 429) {
+      return 'Too many attempts. Try again in a minute.';
+    }
+    return _errorMessage(response);
+  }
+
+  static Future<String?> resetPassword(String token, String password) async {
+    final response = await http
+        .post(
+          Uri.parse('$_base/auth/reset-password'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token.trim(), 'password': password}),
+        )
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => http.Response('', 408),
+        );
+
+    if (response.statusCode == 200) {
+      return null;
+    }
+    if (response.statusCode == 400) {
+      return 'This reset link is invalid or expired.';
+    }
+    if (response.statusCode == 429) {
+      return 'Too many attempts. Try again in a minute.';
+    }
+    return _errorMessage(response);
+  }
+
+  static Future<String?> verifyEmail(String token) async {
+    final response = await http
+        .post(
+          Uri.parse('$_base/auth/verify-email'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token.trim()}),
+        )
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => http.Response('', 408),
+        );
+
+    if (response.statusCode == 200) {
+      return null;
+    }
+    if (response.statusCode == 400) {
+      return 'This verification link is invalid or expired.';
+    }
+    return _errorMessage(response);
+  }
+
+  static Future<String?> resendVerificationEmail() async {
+    final response = await AuthHttp.postJson(
+      Uri.parse('$_base/auth/resend-verification'),
+      {},
+    );
+
+    if (response.statusCode == 200) {
+      return null;
+    }
+    if (response.statusCode == 400) {
+      return _errorMessage(response);
+    }
+    if (response.statusCode == 429) {
+      return 'Too many requests. Wait a minute and try again.';
+    }
+    if (response.statusCode == 503) {
+      return 'Email is not configured on the server.';
     }
     return _errorMessage(response);
   }

@@ -18,6 +18,11 @@ class DeliveryStatus(str, enum.Enum):
     TEMP_FAILURE = "temp_failure"
     PERM_FAILURE = "perm_failure"
 
+class AuthTokenPurpose:
+    EMAIL_VERIFY = "email_verify"
+    PASSWORD_RESET = "password_reset"
+
+
 class User(Base):
     __tablename__ = "users"
     
@@ -25,10 +30,24 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=True)
     firebase_uid = Column(String, unique=True, index=True, nullable=True)
+    email_verified = Column(Boolean, nullable=False, default=False, server_default="false")
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
     timezone = Column(String, nullable=False, default="UTC", server_default="UTC")
     notifications_enabled = Column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class AuthToken(Base):
+    __tablename__ = "auth_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    purpose = Column(String(32), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Reminder(Base):

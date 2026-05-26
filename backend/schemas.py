@@ -28,6 +28,24 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    email_verified: bool = True
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=256)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=256)
 
 
 class RefreshTokenRequest(BaseModel):
@@ -143,6 +161,7 @@ class DeviceRegisterResponse(BaseModel):
 class UserProfileResponse(BaseModel):
     id: UUID
     email: EmailStr
+    email_verified: bool
     timezone: str
     notifications_enabled: bool
     created_at: datetime
