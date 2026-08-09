@@ -7,6 +7,7 @@ import '../services/auth_provider.dart';
 import '../services/feedback_service.dart';
 import '../services/profile_provider.dart';
 import '../widgets/app_chrome.dart';
+import 'verify_email_otp_screen.dart';
 // Timezone UI hidden (Option A). Kept for future use:
 // import '../utils/timezone_options.dart';
 
@@ -294,7 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Check your inbox for a verification link, or resend it below.',
+                        'Check your inbox for a 6-digit code, or verify below.',
                         style: TextStyle(
                           color: AppChrome.muted,
                           fontSize: 13,
@@ -303,22 +304,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 12),
                       FilledButton.tonal(
-                        onPressed: provider.isSaving
-                            ? null
-                            : () async {
-                                final err = await context
-                                    .read<AuthProvider>()
-                                    .resendVerificationEmail();
-                                if (!mounted) return;
-                                if (err != null) {
-                                  _showError(err);
-                                } else {
-                                  _showSuccess(
-                                    'Verification email sent.',
-                                  );
-                                }
-                              },
-                        child: const Text('Resend verification email'),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const VerifyEmailOtpScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text('Verify email'),
                       ),
                     ],
                   ),

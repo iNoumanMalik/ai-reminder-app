@@ -44,8 +44,9 @@ class AuthToken(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, index=True)
     purpose = Column(String(32), nullable=False, index=True)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

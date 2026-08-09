@@ -1,37 +1,42 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../services/auth_service.dart';
+import '../services/auth_provider.dart';
+import '../services/profile_provider.dart';
 import '../widgets/app_chrome.dart';
 import '../widgets/otp_input.dart';
 
-class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key, required this.email});
-
-  final String email;
+/// In-app email verification: always sends a fresh code on open (safe —
+/// requesting a new code invalidates any prior one), then lets the user
+/// type it in without ever leaving the app.
+class VerifyEmailOtpScreen extends StatefulWidget {
+  const VerifyEmailOtpScreen({super.key});
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  State<VerifyEmailOtpScreen> createState() => _VerifyEmailOtpScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+class _VerifyEmailOtpScreenState extends State<VerifyEmailOtpScreen> {
   final _otpController = OtpInputController();
-  final _password = TextEditingController();
-  final _confirm = TextEditingController();
   String _code = '';
   bool _busy = false;
-  bool _done = false;
-  bool _resending = false;
+  bool _sending = false;
+  bool _verified = false;
   String? _error;
   Timer? _cooldownTimer;
   int _cooldownSeconds = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sendCode());
+  }
+
+  @override
   void dispose() {
     _cooldownTimer?.cancel();
-    _password.dispose();
-    _confirm.dispose();
     super.dispose();
   }
 
@@ -52,60 +57,44 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     });
   }
 
-  Future<void> _resend() async {
+  Future<void> _sendCode({bool announce = false}) async {
     setState(() {
-      _resending = true;
+      _sending = true;
       _error = null;
     });
-    final err = await AuthService.forgotPassword(widget.email);
+    final err = await context.read<AuthProvider>().resendVerificationEmail();
     if (!mounted) return;
-    setState(() => _resending = false);
+    setState(() => _sending = false);
     if (err != null) {
       setState(() => _error = err);
       return;
     }
-    _otpController.clear();
     _startCooldown();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('A new code was sent to your email.')),
-    );
+    if (announce) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A new code was sent to your email.')),
+      );
+    }
   }
 
-  Future<void> _submit() async {
-    final password = _password.text;
-    final confirm = _confirm.text;
-    if (_code.length < 6) {
-      setState(() => _error = 'Enter the 6-digit code from your email.');
-      return;
-    }
-    if (password.length < 8) {
-      setState(() => _error = 'Password must be at least 8 characters.');
-      return;
-    }
-    if (password != confirm) {
-      setState(() => _error = 'Passwords do not match.');
-      return;
-    }
+  Future<void> _submit(String code) async {
+    if (code.length < 6 || _busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
-    final err = await AuthService.resetPassword(
-      widget.email,
-      _code,
-      password,
-    );
+    final err = await context.read<AuthProvider>().verifyEmailWithCode(code);
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      if (err != null) {
-        _error = err;
-        _otpController.clear();
-        _code = '';
-      } else {
-        _done = true;
-      }
-    });
+    setState(() => _busy = false);
+    if (err != null) {
+      setState(() => _error = err);
+      _otpController.clear();
+      _code = '';
+      return;
+    }
+    await context.read<ProfileProvider>().fetchProfile();
+    if (!mounted) return;
+    setState(() => _verified = true);
   }
 
   @override
@@ -113,11 +102,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     return SpeakardoScaffold(
       appBar: AppBar(
         title: const Text(
-          'Reset password',
-          style: TextStyle(
-            color: AppChrome.ink,
-            fontWeight: FontWeight.w800,
-          ),
+          'Verify email',
+          style: TextStyle(color: AppChrome.ink, fontWeight: FontWeight.w800),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -131,7 +117,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             child: GlassPanel(
               borderRadius: 28,
               padding: const EdgeInsets.all(28),
-              child: _done
+              child: _verified
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -143,7 +129,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                         const SizedBox(height: 20),
                         const Text(
-                          'Password updated',
+                          'Email verified',
                           style: TextStyle(
                             color: AppChrome.ink,
                             fontSize: 20,
@@ -153,7 +139,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'You can sign in with your new password.',
+                          'Your email address is confirmed.',
                           style: TextStyle(
                             color: AppChrome.muted,
                             fontSize: 14,
@@ -163,12 +149,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                         const SizedBox(height: 24),
                         FilledButton(
-                          onPressed: () => Navigator.popUntil(
-                            context,
-                            (route) => route.isFirst,
-                          ),
+                          onPressed: () => Navigator.of(context).pop(),
                           style: AppChrome.primaryButtonStyle(),
-                          child: const Text('Back to sign in'),
+                          child: const Text('Continue'),
                         ),
                       ],
                     )
@@ -177,7 +160,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Enter the 6-digit code sent to ${widget.email}.',
+                          _sending
+                              ? 'Sending a code to your email...'
+                              : 'We sent a 6-digit code to your email. '
+                                    'Enter it below to verify your address.',
                           style: const TextStyle(
                             color: AppChrome.ink,
                             fontSize: 14,
@@ -187,17 +173,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         const SizedBox(height: 20),
                         OtpInput(
                           controller: _otpController,
-                          enabled: !_busy,
+                          enabled: !_busy && !_sending,
                           onChanged: (value) => _code = value,
-                          onCompleted: (value) => _code = value,
+                          onCompleted: _submit,
                         ),
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
                             onPressed:
-                                (_resending || _cooldownSeconds > 0)
+                                (_sending || _cooldownSeconds > 0)
                                 ? null
-                                : _resend,
+                                : () => _sendCode(announce: true),
                             child: Text(
                               _cooldownSeconds > 0
                                   ? 'Resend code (0:${_cooldownSeconds.toString().padLeft(2, '0')})'
@@ -205,27 +191,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _password,
-                          obscureText: true,
-                          enabled: !_busy,
-                          decoration: AppChrome.inputDecoration(
-                            label: 'New password',
-                            helperText: 'At least 8 characters',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _confirm,
-                          obscureText: true,
-                          enabled: !_busy,
-                          decoration: AppChrome.inputDecoration(
-                            label: 'Confirm password',
-                          ),
-                        ),
                         if (_error != null) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 4),
                           Text(
                             _error!,
                             style: TextStyle(
@@ -236,7 +203,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ],
                         const SizedBox(height: 20),
                         FilledButton(
-                          onPressed: _busy ? null : _submit,
+                          onPressed: _busy ? null : () => _submit(_code),
                           style: AppChrome.primaryButtonStyle(),
                           child: _busy
                               ? const SizedBox(
@@ -247,7 +214,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text('Update password'),
+                              : const Text('Verify'),
                         ),
                       ],
                     ),

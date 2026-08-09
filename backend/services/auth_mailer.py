@@ -1,4 +1,4 @@
-"""High-level auth emails (verification + password reset)."""
+"""High-level auth emails (verification + password reset), OTP-based."""
 
 from __future__ import annotations
 
@@ -17,24 +17,20 @@ def send_verification_email(db: Session, user: models.User) -> bool:
         return True
     if user.password is None:
         return True
-    raw = email_tokens.create_token(
-        db, user.id, models.AuthTokenPurpose.EMAIL_VERIFY
-    )
-    base = email_service.public_app_url()
-    verify_url = f"{base}/auth/verify-email/confirm?token={raw}"
-    app_url = f"aireminder://verify-email?token={raw}"
-    subject = "Verify your AI Reminder email"
+    code = email_tokens.create_otp(db, user.id, models.AuthTokenPurpose.EMAIL_VERIFY)
+    minutes = email_tokens.EMAIL_VERIFY_OTP_MINUTES
+    subject = "Your AI Reminder verification code"
     text = (
         f"Hi,\n\n"
-        f"Please verify your email for AI Reminder:\n\n"
-        f"{verify_url}\n\n"
-        f"Or open in the app: {app_url}\n\n"
+        f"Your verification code is: {code}\n\n"
+        f"Enter this code in the app to verify your email. "
+        f"It expires in {minutes} minutes.\n\n"
         f"If you did not create an account, you can ignore this message.\n"
     )
     html = (
-        f"<p>Please verify your email for <strong>AI Reminder</strong>:</p>"
-        f'<p><a href="{verify_url}">Verify email</a></p>'
-        f"<p>Link expires in 48 hours.</p>"
+        f"<p>Your <strong>AI Reminder</strong> verification code:</p>"
+        f'<p style="font-size:28px;font-weight:700;letter-spacing:4px;">{code}</p>'
+        f"<p>Enter this in the app. It expires in {minutes} minutes.</p>"
     )
     ok = email_service.send_email(user.email, subject, text, html)
     if ok:
@@ -45,24 +41,20 @@ def send_verification_email(db: Session, user: models.User) -> bool:
 def send_password_reset_email(db: Session, user: models.User) -> bool:
     if user.password is None:
         return False
-    raw = email_tokens.create_token(
-        db, user.id, models.AuthTokenPurpose.PASSWORD_RESET
-    )
-    base = email_service.public_app_url()
-    reset_url = f"{base}/auth/reset-password/form?token={raw}"
-    app_url = f"aireminder://reset-password?token={raw}"
-    subject = "Reset your AI Reminder password"
+    code = email_tokens.create_otp(db, user.id, models.AuthTokenPurpose.PASSWORD_RESET)
+    minutes = email_tokens.PASSWORD_RESET_OTP_MINUTES
+    subject = "Your AI Reminder password reset code"
     text = (
         f"Hi,\n\n"
-        f"Reset your password using this link (expires in 2 hours):\n\n"
-        f"{reset_url}\n\n"
-        f"Or in the app: {app_url}\n\n"
+        f"Your password reset code is: {code}\n\n"
+        f"Enter this code in the app to reset your password. "
+        f"It expires in {minutes} minutes.\n\n"
         f"If you did not request this, ignore this email.\n"
     )
     html = (
-        f"<p>Reset your <strong>AI Reminder</strong> password:</p>"
-        f'<p><a href="{reset_url}">Reset password</a></p>'
-        f"<p>This link expires in 2 hours.</p>"
+        f"<p>Your <strong>AI Reminder</strong> password reset code:</p>"
+        f'<p style="font-size:28px;font-weight:700;letter-spacing:4px;">{code}</p>'
+        f"<p>Enter this in the app. It expires in {minutes} minutes.</p>"
     )
     ok = email_service.send_email(user.email, subject, text, html)
     if ok:

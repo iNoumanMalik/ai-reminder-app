@@ -50,18 +50,6 @@ def smtp_config_status() -> dict[str, object]:
     }
 
 
-def public_app_url() -> str:
-    """Base URL for links in emails (API or marketing site)."""
-    return (
-        os.getenv("APP_PUBLIC_URL", "").strip()
-        or os.getenv("PUBLIC_APP_URL", "").strip()
-        or "http://127.0.0.1:8000"
-    ).rstrip("/")
-
-
-def mobile_deep_link_base() -> str:
-    return os.getenv("MOBILE_DEEP_LINK_BASE", "aireminder://").rstrip("/")
-
 
 def send_email(
     to_address: str,

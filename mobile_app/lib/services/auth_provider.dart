@@ -96,8 +96,8 @@ class AuthProvider extends ChangeNotifier {
     return AuthService.resendVerificationEmail();
   }
 
-  Future<String?> verifyEmailWithToken(String token) async {
-    final err = await AuthService.verifyEmail(token);
+  Future<String?> verifyEmailWithCode(String code) async {
+    final err = await AuthService.verifyEmail(code);
     if (err == null) {
       notifyListeners();
     }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../widgets/app_chrome.dart';
 import 'forgot_password_screen.dart';
+import 'verify_email_otp_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,13 +53,12 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = err;
     });
     if (err == null && _registerMode && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Account created. Check your email to verify your address.',
-          ),
-          duration: Duration(seconds: 5),
-        ),
+      // push (not pushReplacement): AuthProvider.register() already flipped
+      // isLoggedIn and notified listeners, so the root AuthGate is about to
+      // swap this screen for MainScreen on its own. Pushing keeps that base
+      // route alive underneath so "Continue" below has somewhere to pop to.
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const VerifyEmailOtpScreen()),
       );
     }
   }

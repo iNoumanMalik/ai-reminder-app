@@ -1,12 +1,13 @@
-"""One-time tokens for email verification and password reset."""
+"""One-time 6-digit OTP codes for email verification and password reset."""
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -15,8 +16,11 @@ import models
 
 logger = logging.getLogger(__name__)
 
-EMAIL_VERIFY_HOURS = int(__import__("os").getenv("EMAIL_VERIFY_TOKEN_HOURS", "48"))
-PASSWORD_RESET_HOURS = int(__import__("os").getenv("PASSWORD_RESET_TOKEN_HOURS", "2"))
+OTP_LENGTH = 6
+OTP_PATTERN = re.compile(r"^\d{6}$")
+OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
+EMAIL_VERIFY_OTP_MINUTES = int(os.getenv("EMAIL_VERIFY_OTP_MINUTES", "10"))
+PASSWORD_RESET_OTP_MINUTES = int(os.getenv("PASSWORD_RESET_OTP_MINUTES", "10"))
 
 
 def _hash_token(raw: str) -> str:
@@ -40,55 +44,83 @@ def _invalidate_existing(db: Session, user_id: UUID, purpose: str) -> None:
         db.add(row)
 
 
-def create_token(db: Session, user_id: UUID, purpose: str) -> str:
-    hours = (
-        EMAIL_VERIFY_HOURS
+def _generate_otp() -> str:
+    return f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
+
+
+def create_otp(db: Session, user_id: UUID, purpose: str) -> str:
+    """Generate, store (hashed), and return a plaintext 6-digit OTP.
+
+    Invalidates any prior unused/unexpired code for the same user+purpose,
+    so requesting a new code (including "resend") naturally supersedes the
+    old one.
+    """
+    minutes = (
+        EMAIL_VERIFY_OTP_MINUTES
         if purpose == models.AuthTokenPurpose.EMAIL_VERIFY
-        else PASSWORD_RESET_HOURS
+        else PASSWORD_RESET_OTP_MINUTES
     )
     _invalidate_existing(db, user_id, purpose)
-    raw = secrets.token_urlsafe(32)
+    code = _generate_otp()
     row = models.AuthToken(
         user_id=user_id,
-        token_hash=_hash_token(raw),
+        token_hash=_hash_token(code),
         purpose=purpose,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=hours),
+        attempts=0,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=minutes),
     )
     db.add(row)
     db.commit()
     logger.info(
-        "event=auth_token_created user_id=%s purpose=%s expires_hours=%s",
+        "event=otp_created user_id=%s purpose=%s expires_minutes=%s",
         user_id,
         purpose,
-        hours,
+        minutes,
     )
-    return raw
+    return code
 
 
-def consume_token(db: Session, raw_token: str, purpose: str) -> Optional[models.User]:
-    cleaned = (raw_token or "").strip()
-    if not cleaned:
-        return None
+def verify_otp(db: Session, user_id: UUID, purpose: str, code: str) -> bool:
+    """Verify a 6-digit code scoped to a known user.
+
+    Codes are only 1,000,000 combinations, so lookup MUST be scoped by
+    user_id (unlike the old opaque-token lookup) to avoid one user's code
+    matching another user's row on hash collision. Increments the attempts
+    counter on mismatch and locks the code out after OTP_MAX_ATTEMPTS
+    failures. Returns True and marks the row used_at on success.
+    """
+    cleaned = (code or "").strip()
+    if not OTP_PATTERN.match(cleaned):
+        return False
     now = datetime.now(timezone.utc)
     row = (
         db.query(models.AuthToken)
         .filter(
-            models.AuthToken.token_hash == _hash_token(cleaned),
+            models.AuthToken.user_id == user_id,
             models.AuthToken.purpose == purpose,
             models.AuthToken.used_at.is_(None),
             models.AuthToken.expires_at > now,
         )
+        .order_by(models.AuthToken.created_at.desc())
         .first()
     )
     if row is None:
-        return None
+        return False
+    if row.attempts >= OTP_MAX_ATTEMPTS:
+        row.used_at = now
+        db.add(row)
+        db.commit()
+        return False
+    if row.token_hash != _hash_token(cleaned):
+        row.attempts += 1
+        if row.attempts >= OTP_MAX_ATTEMPTS:
+            row.used_at = now
+            logger.info("event=otp_locked user_id=%s purpose=%s", user_id, purpose)
+        db.add(row)
+        db.commit()
+        return False
     row.used_at = now
     db.add(row)
-    user = db.query(models.User).filter(models.User.id == row.user_id).first()
-    if user is None:
-        db.commit()
-        return None
     db.commit()
-    db.refresh(user)
-    logger.info("event=auth_token_consumed user_id=%s purpose=%s", user.id, purpose)
-    return user
+    logger.info("event=otp_verified user_id=%s purpose=%s", user_id, purpose)
+    return True

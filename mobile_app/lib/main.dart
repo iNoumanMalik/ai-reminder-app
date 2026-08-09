@@ -12,7 +12,6 @@ import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'config/app_config.dart';
-import 'services/auth_deep_link_service.dart';
 import 'services/auth_provider.dart';
 import 'services/chat_provider.dart';
 import 'services/onboarding_storage.dart';
@@ -40,10 +39,6 @@ Future<void> main() async {
       }
     }
     await NotificationDeepLink.loadFromDisk();
-  }
-
-  if (!kIsWeb) {
-    await AuthDeepLinkService.initialize(_rootNavigatorKey);
   }
 
   runApp(

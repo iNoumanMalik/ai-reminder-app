@@ -158,12 +158,20 @@ class AuthService {
     return _errorMessage(response);
   }
 
-  static Future<String?> resetPassword(String token, String password) async {
+  static Future<String?> resetPassword(
+    String email,
+    String code,
+    String password,
+  ) async {
     final response = await http
         .post(
           Uri.parse('$_base/auth/reset-password'),
           headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': token.trim(), 'password': password}),
+          body: jsonEncode({
+            'email': email.trim(),
+            'code': code.trim(),
+            'password': password,
+          }),
         )
         .timeout(
           const Duration(seconds: 15),
@@ -174,7 +182,7 @@ class AuthService {
       return null;
     }
     if (response.statusCode == 400) {
-      return 'This reset link is invalid or expired.';
+      return 'Invalid or expired code. Request a new one.';
     }
     if (response.statusCode == 429) {
       return 'Too many attempts. Try again in a minute.';
@@ -185,23 +193,21 @@ class AuthService {
     return _errorMessage(response);
   }
 
-  static Future<String?> verifyEmail(String token) async {
-    final response = await http
-        .post(
-          Uri.parse('$_base/auth/verify-email'),
-          headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': token.trim()}),
-        )
-        .timeout(
-          const Duration(seconds: 15),
-          onTimeout: () => http.Response('', 408),
-        );
+  /// Verifies the signed-in user's email with a 6-digit code (authenticated).
+  static Future<String?> verifyEmail(String code) async {
+    final response = await AuthHttp.postJson(
+      Uri.parse('$_base/auth/verify-email'),
+      {'code': code.trim()},
+    );
 
     if (response.statusCode == 200) {
       return null;
     }
     if (response.statusCode == 400) {
-      return 'This verification link is invalid or expired.';
+      return 'Invalid or expired code. Request a new one.';
+    }
+    if (response.statusCode == 429) {
+      return 'Too many attempts. Try again in a minute.';
     }
     if (response.statusCode == 408) {
       return 'Request timed out. Please check your connection and try again.';
