@@ -59,60 +59,101 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final submitted = await showDialog<bool>(
       context: context,
+      barrierColor: AppChrome.ink.withValues(alpha: 0.32),
       builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text(
-            'Send feedback',
-            style: TextStyle(color: AppChrome.ink, fontWeight: FontWeight.w900),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Tell us what you like or what we should improve.',
-                  style: TextStyle(color: AppChrome.muted, height: 1.4),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  maxLines: 5,
-                  maxLength: 2000,
-                  decoration: AppChrome.inputDecoration(
-                    label: 'Feedback description',
-                    hint: 'Your feedback...',
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: GlassPanel(
+            borderRadius: 28,
+            color: Colors.white.withValues(alpha: 0.94),
+            padding: const EdgeInsets.all(22),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: AppChrome.primary.withValues(alpha: 0.1),
+                          border: Border.all(
+                            color: AppChrome.primary.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.rate_review_rounded,
+                          color: AppChrome.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Text(
+                          'Send feedback',
+                          style: TextStyle(
+                            color: AppChrome.ink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Tell us what you like or what we should improve.',
+                    style: TextStyle(color: AppChrome.muted, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    maxLines: 5,
+                    maxLength: 2000,
+                    decoration: AppChrome.inputDecoration(
+                      label: 'Feedback description',
+                      hint: 'Your feedback...',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppChrome.muted,
+                          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () {
+                          if (controller.text.trim().length < 3) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Please enter at least 3 characters.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.pop(context, true);
+                        },
+                        style: AppChrome.primaryButtonStyle(),
+                        child: const Text('Submit'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              style: TextButton.styleFrom(
-                foregroundColor: AppChrome.muted,
-                textStyle: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (controller.text.trim().length < 3) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please enter at least 3 characters.'),
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(context, true);
-              },
-              style: AppChrome.primaryButtonStyle(),
-              child: const Text('Submit'),
-            ),
-          ],
         );
       },
     );

@@ -1,4 +1,4 @@
-import env_config  # noqa: F401 — load repository root .env before reading os.environ
+import env_config  
 
 import os
 from sqlalchemy import create_engine

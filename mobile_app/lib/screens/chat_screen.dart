@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import '../services/chat_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/app_chrome.dart';
+import '../widgets/speakardo_icons.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -20,6 +21,7 @@ class _ChatScreenState extends State<ChatScreen>
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
+  bool _hasText = false;
 
   /// True from mic tap-start until tap-stop finishes (plugin may stop early).
   bool _micSessionOpen = false;
@@ -38,6 +40,7 @@ class _ChatScreenState extends State<ChatScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.12).animate(
       CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
     );
+    _textController.addListener(_handleTextChanged);
     _initSpeech();
   }
 
@@ -46,8 +49,16 @@ class _ChatScreenState extends State<ChatScreen>
     _micSessionOpen = false;
     _speech.stop();
     _pulseController?.dispose();
+    _textController.removeListener(_handleTextChanged);
     _textController.dispose();
     super.dispose();
+  }
+
+  void _handleTextChanged() {
+    final hasText = _textController.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() => _hasText = hasText);
+    }
   }
 
   void _initSpeech() async {
@@ -260,11 +271,17 @@ class _ChatScreenState extends State<ChatScreen>
           children: [
             SpeakardoTopBar(
               title: 'Speakardo',
-              subtitle: _isListening ? 'Listening' : 'Active',
+              subtitleWidget: BlinkingStatusLabel(
+                label: _isListening ? 'Listening' : 'Active',
+                color: _isListening ? Colors.redAccent : AppChrome.primary,
+              ),
               trailing: IconButton.filledTonal(
                 onPressed: () {},
                 tooltip: 'Menu',
-                icon: const Icon(Icons.menu_rounded),
+                icon: const SpeakardoSvgIcon(
+                  SpeakardoIcons.hamburgerMenuLinear,
+                  size: 20,
+                ),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white.withValues(alpha: 0.7),
                   foregroundColor: AppChrome.muted,
@@ -282,8 +299,8 @@ class _ChatScreenState extends State<ChatScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.calendar_today_rounded,
+                    const SpeakardoSvgIcon(
+                      SpeakardoIcons.calendarDateLinear,
                       size: 16,
                       color: AppChrome.accent,
                     ),
@@ -341,15 +358,15 @@ class _ChatScreenState extends State<ChatScreen>
                     child: Row(
                       children: const [
                         _QuickActionChip(
-                          icon: Icons.add_circle_outline_rounded,
+                          iconAsset: SpeakardoIcons.addCircleLinear,
                           label: 'New Reminder',
                         ),
                         _QuickActionChip(
-                          icon: Icons.calendar_month_outlined,
+                          iconAsset: SpeakardoIcons.calendarMinimalisticLinear,
                           label: 'View Timeline',
                         ),
                         _QuickActionChip(
-                          icon: Icons.psychology_alt_outlined,
+                          iconAsset: SpeakardoIcons.brain,
                           label: 'Memory Core',
                         ),
                       ],
@@ -364,7 +381,10 @@ class _ChatScreenState extends State<ChatScreen>
                         IconButton(
                           onPressed: () {},
                           tooltip: 'Attach',
-                          icon: const Icon(Icons.attach_file_rounded),
+                          icon: const SpeakardoSvgIcon(
+                            SpeakardoIcons.paperclipLinear,
+                            size: 20,
+                          ),
                           color: AppChrome.muted,
                         ),
                         Expanded(
@@ -393,12 +413,37 @@ class _ChatScreenState extends State<ChatScreen>
                             return Transform.scale(scale: scale, child: child);
                           },
                           child: IconButton.filled(
-                            onPressed: _listen,
-                            tooltip: _isListening ? 'Stop listening' : 'Speak',
-                            icon: Icon(
-                              _isListening
-                                  ? Icons.stop_rounded
-                                  : Icons.mic_rounded,
+                            onPressed: _isListening
+                                ? _listen
+                                : (_hasText ? _sendMessage : _listen),
+                            tooltip: _isListening
+                                ? 'Stop listening'
+                                : (_hasText ? 'Send' : 'Speak'),
+                            icon: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(
+                                    scale: animation,
+                                    child: child,
+                                  ),
+                              child: _isListening
+                                  ? const Icon(
+                                      Icons.stop_rounded,
+                                      key: ValueKey('stop'),
+                                    )
+                                  : _hasText
+                                  ? const SpeakardoSvgIcon(
+                                      SpeakardoIcons.arrowRightLinear,
+                                      size: 20,
+                                      color: Colors.white,
+                                      key: ValueKey('send'),
+                                    )
+                                  : const SpeakardoSvgIcon(
+                                      SpeakardoIcons.microphoneBold,
+                                      size: 20,
+                                      color: Colors.white,
+                                      key: ValueKey('mic'),
+                                    ),
                             ),
                             style: IconButton.styleFrom(
                               backgroundColor: _isListening
@@ -407,19 +452,6 @@ class _ChatScreenState extends State<ChatScreen>
                               foregroundColor: Colors.white,
                               fixedSize: const Size(50, 50),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton.filledTonal(
-                          onPressed: _sendMessage,
-                          tooltip: 'Send',
-                          icon: const Icon(Icons.send_rounded),
-                          style: IconButton.styleFrom(
-                            backgroundColor: AppChrome.primary.withValues(
-                              alpha: 0.1,
-                            ),
-                            foregroundColor: AppChrome.primary,
-                            fixedSize: const Size(46, 46),
                           ),
                         ),
                       ],
@@ -461,9 +493,9 @@ class _ChatScreenState extends State<ChatScreen>
 }
 
 class _QuickActionChip extends StatelessWidget {
-  const _QuickActionChip({required this.icon, required this.label});
+  const _QuickActionChip({required this.iconAsset, required this.label});
 
-  final IconData icon;
+  final String iconAsset;
   final String label;
 
   @override
@@ -476,7 +508,7 @@ class _QuickActionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: AppChrome.primary),
+            SpeakardoSvgIcon(iconAsset, size: 18, color: AppChrome.primary),
             const SizedBox(width: 7),
             Text(
               label,

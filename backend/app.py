@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import logging
 import os
 
-import env_config  # noqa: F401 — load repository root .env
+import env_config  
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/app_chrome.dart';
+import '../widgets/speakardo_icons.dart';
 
 class MemoryScreen extends StatelessWidget {
   const MemoryScreen({super.key});
@@ -103,6 +104,7 @@ class _MemoryOrb extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
+          const Positioned.fill(child: _OrbBackdrop()),
           SizedBox(
             width: 220,
             height: 220,
@@ -123,44 +125,195 @@ class _MemoryOrb extends StatelessWidget {
               backgroundColor: AppChrome.primary.withValues(alpha: 0.05),
             ),
           ),
-          GlassPanel(
-            borderRadius: 80,
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(
-                  Icons.psychology_alt_rounded,
-                  size: 52,
-                  color: AppChrome.primary,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Speakardo v2.4',
-                  style: TextStyle(
-                    color: AppChrome.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
+          SizedBox.square(
+            dimension: 180,
+            child: GlassPanel(
+              borderRadius: 100,
+              padding: const EdgeInsets.all(40),
+
+              // AppLogoMark's brand diagonal (primary → white → accent), dimmed way down.
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppChrome.primary.withValues(alpha: 0.10),
+                  Colors.white.withValues(alpha: 0.92),
+                  AppChrome.accent.withValues(alpha: 0.10),
+                ],
+              ),
+
+              // Bright white border
+              borderColor: Colors.white,
+              borderWidth: 6,
+
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      SpeakardoSvgIcon(
+                        SpeakardoIcons.brain,
+                        size: 52,
+                        color: AppChrome.primary,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'SPEAKARDO V2.4',
+                        style: TextStyle(
+                          color: AppChrome.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
           const Positioned(
             top: 20,
             right: 20,
-            child: _FloatingTag(label: 'Q3 Goals', color: AppChrome.accent),
+            child: _FloatingBob(
+              duration: Duration(milliseconds: 2600),
+              child: _FloatingTag(label: 'Q3 Goals', color: AppChrome.accent),
+            ),
           ),
           const Positioned(
             bottom: 28,
             left: 4,
-            child: _FloatingTag(
-              label: 'Personal Health',
-              color: AppChrome.primary,
+            child: _FloatingBob(
+              duration: Duration(milliseconds: 3200),
+              delay: Duration(milliseconds: 400),
+              child: _FloatingTag(
+                label: 'Personal Health',
+                color: AppChrome.primary,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Decorative backdrop behind the memory orb: a soft radial glow, faint
+/// crossing diagonals, and concentric rings — echoes the "AI network" motif
+/// of the design reference without competing with the orb itself.
+class _OrbBackdrop extends StatelessWidget {
+  const _OrbBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _OrbBackdropPainter());
+  }
+}
+
+class _OrbBackdropPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.shortestSide / 2 + 26;
+
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          AppChrome.primary.withValues(alpha: 0.14),
+          const Color(0xFF8B5CF6).withValues(alpha: 0.07),
+          Colors.transparent,
+        ],
+        stops: const [0, 0.6, 1],
+      ).createShader(Rect.fromCircle(center: center, radius: maxRadius));
+    canvas.drawCircle(center, maxRadius, glowPaint);
+
+    final diagonalLength = maxRadius * 1.15;
+    final linePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8
+      ..shader = LinearGradient(
+        colors: [
+          Colors.transparent,
+          AppChrome.primary.withValues(alpha: 0.18),
+          Colors.transparent,
+        ],
+        stops: const [0, 0.5, 1],
+      ).createShader(
+        Rect.fromCircle(center: center, radius: diagonalLength),
+      );
+    canvas.drawLine(
+      center - Offset(diagonalLength, diagonalLength),
+      center + Offset(diagonalLength, diagonalLength),
+      linePaint,
+    );
+    canvas.drawLine(
+      center - Offset(-diagonalLength, diagonalLength),
+      center + Offset(-diagonalLength, diagonalLength),
+      linePaint,
+    );
+
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.6
+      ..color = AppChrome.line.withValues(alpha: 0.55);
+    for (final fraction in [0.62, 0.86, 1.0]) {
+      canvas.drawCircle(center, maxRadius * fraction, ringPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _OrbBackdropPainter oldDelegate) => false;
+}
+
+/// Wraps [child] in a gentle, continuous up-and-down float.
+class _FloatingBob extends StatefulWidget {
+  const _FloatingBob({
+    required this.child,
+    this.duration = const Duration(milliseconds: 2800),
+    this.delay = Duration.zero,
+    this.amplitude = 6,
+  });
+
+  final Widget child;
+  final Duration duration;
+  final Duration delay;
+  final double amplitude;
+
+  @override
+  State<_FloatingBob> createState() => _FloatingBobState();
+}
+
+class _FloatingBobState extends State<_FloatingBob>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(widget.delay, () {
+      if (mounted) _controller.repeat(reverse: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        final offset = (t * 2 - 1) * widget.amplitude;
+        return Transform.translate(offset: Offset(0, offset), child: child);
+      },
+      child: widget.child,
     );
   }
 }
@@ -308,7 +461,11 @@ class _SectionTitle extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(onPressed: () {}, child: Text(action.toUpperCase())),
+          TextButton(
+            onPressed: () {},
+            style: TextButton.styleFrom(foregroundColor: AppChrome.primary),
+            child: Text(action.toUpperCase()),
+          ),
         ],
       ),
     );

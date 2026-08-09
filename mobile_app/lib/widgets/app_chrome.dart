@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'speakardo_icons.dart';
 
 class AppChrome {
   static const Color primary = Color(0xFF6366F1);
@@ -134,7 +135,9 @@ class GlassPanel extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.borderRadius = 24,
     this.color,
+    this.gradient,
     this.borderColor,
+    this.borderWidth = 1.0,
     this.margin,
   });
 
@@ -142,7 +145,9 @@ class GlassPanel extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double borderRadius;
   final Color? color;
+  final Gradient? gradient;
   final Color? borderColor;
+  final double borderWidth;
   final EdgeInsetsGeometry? margin;
 
   @override
@@ -157,10 +162,14 @@ class GlassPanel extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: color ?? Colors.white.withValues(alpha: 0.68),
+              color: gradient == null
+                  ? (color ?? Colors.white.withValues(alpha: 0.68))
+                  : null,
+              gradient: gradient,
               borderRadius: radius,
               border: Border.all(
                 color: borderColor ?? Colors.white.withValues(alpha: 0.78),
+                width: borderWidth,
               ),
               boxShadow: [
                 BoxShadow(
@@ -226,6 +235,7 @@ class SpeakardoTopBar extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.subtitleWidget,
     this.leading,
     this.trailing,
     this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -233,6 +243,7 @@ class SpeakardoTopBar extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final Widget? subtitleWidget;
   final Widget? leading;
   final Widget? trailing;
   final EdgeInsetsGeometry padding;
@@ -259,7 +270,10 @@ class SpeakardoTopBar extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (subtitle != null) ...[
+                if (subtitleWidget != null) ...[
+                  const SizedBox(height: 4),
+                  subtitleWidget!,
+                ] else if (subtitle != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     subtitle!,
@@ -293,95 +307,141 @@ class RevampedBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const _items = [
-    _NavItem('Chat', Icons.chat_bubble_outline, Icons.chat_bubble),
-    _NavItem('Timeline', Icons.calendar_month_outlined, Icons.calendar_month),
-    _NavItem('Mic', Icons.mic_none_rounded, Icons.mic_rounded),
-    _NavItem('Memory', Icons.psychology_alt_outlined, Icons.psychology_alt),
-    _NavItem('System', Icons.settings_outlined, Icons.settings),
+    _NavItem(
+      'Chat',
+      SpeakardoIcons.chatLineLinear,
+      SpeakardoIcons.chatDotsBold,
+    ),
+    _NavItem(
+      'Timeline',
+      SpeakardoIcons.calendarLinear,
+      SpeakardoIcons.calendarBold,
+    ),
+    _NavItem(
+      'Mic',
+      SpeakardoIcons.microphoneBold,
+      SpeakardoIcons.microphoneBold,
+    ),
+    _NavItem('Memory', SpeakardoIcons.brain, SpeakardoIcons.brain),
+    _NavItem(
+      'System',
+      SpeakardoIcons.settingsLinear,
+      SpeakardoIcons.settingsLinear,
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final isMicActive = currentIndex == 2;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-      child: GlassPanel(
-        borderRadius: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(_items.length, (index) {
-            final item = _items[index];
-            final active = index == currentIndex;
-            final isMic = index == 2;
-            return Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(22),
-                onTap: () => onTap(index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: active && !isMic
-                        ? AppChrome.primary.withValues(alpha: 0.08)
-                        : Colors.transparent,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          GlassPanel(
+            borderRadius: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(_items.length, (index) {
+                if (index == 2) {
+                  // Reserved for the floating mic button rendered above.
+                  return const Expanded(child: SizedBox(height: 58));
+                }
+                final item = _items[index];
+                final active = index == currentIndex;
+                return Expanded(
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        width: isMic ? 48 : 28,
-                        height: isMic ? 48 : 28,
-                        decoration: isMic
-                            ? BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppChrome.primary,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 3,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppChrome.primary.withValues(
-                                      alpha: active ? 0.36 : 0.22,
-                                    ),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              )
-                            : null,
-                        child: Icon(
-                          active ? item.activeIcon : item.icon,
-                          size: isMic ? 23 : 22,
-                          color: isMic
-                              ? Colors.white
-                              : active
-                                  ? AppChrome.primary
-                                  : AppChrome.muted,
-                        ),
+                    onTap: () => onTap(index),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? AppChrome.primary.withValues(alpha: 0.08)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(22),
                       ),
-                      if (!isMic) ...[
-                        const SizedBox(height: 1),
-                        Text(
-                          item.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SpeakardoSvgIcon(
+                            active ? item.activeIcon : item.icon,
+                            size: 22,
                             color: active ? AppChrome.primary : AppChrome.muted,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
                           ),
-                        ),
-                      ],
-                    ],
+                          const SizedBox(height: 1),
+                          Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: active ? AppChrome.primary : AppChrome.muted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                );
+              }),
+            ),
+          ),
+          Positioned(
+            top: -10,
+            child: _MicButton(
+              active: isMicActive,
+              onTap: () => onTap(2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MicButton extends StatelessWidget {
+  const _MicButton({required this.active, required this.onTap});
+
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppChrome.primary,
+            border: Border.all(color: Colors.white, width: 4),
+            boxShadow: [
+              BoxShadow(
+                color: AppChrome.primary.withValues(alpha: active ? 0.4 : 0.26),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
               ),
-            );
-          }),
+            ],
+          ),
+          child: const Center(
+            child: SpeakardoSvgIcon(
+              SpeakardoIcons.microphoneBold,
+              size: 19,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
     );
@@ -392,6 +452,69 @@ class _NavItem {
   const _NavItem(this.label, this.icon, this.activeIcon);
 
   final String label;
-  final IconData icon;
-  final IconData activeIcon;
+  final String icon;
+  final String activeIcon;
+}
+
+/// Status text preceded by a continuously blinking dot, e.g. "● ACTIVE".
+class BlinkingStatusLabel extends StatefulWidget {
+  const BlinkingStatusLabel({
+    super.key,
+    required this.label,
+    this.color = AppChrome.primary,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  State<BlinkingStatusLabel> createState() => _BlinkingStatusLabelState();
+}
+
+class _BlinkingStatusLabelState extends State<BlinkingStatusLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+  late final Animation<double> _opacity = Tween<double>(
+    begin: 0.25,
+    end: 1,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FadeTransition(
+          opacity: _opacity,
+          child: Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.color,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          widget.label.toUpperCase(),
+          style: TextStyle(
+            color: widget.color,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
+    );
+  }
 }
